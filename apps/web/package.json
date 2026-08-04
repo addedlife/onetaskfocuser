@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "lint": "node scripts/lint.mjs",
     "gm3": "node scripts/gm3-ratchet.mjs",
+    "nc:lists": "node scripts/nc-lists-ratchet.mjs",
     "gm3:update": "node scripts/gm3-ratchet.mjs --update",
     "test:phone": "node --test tests/*.test.mjs",
     "map:check": "node scripts/check-map.cjs"

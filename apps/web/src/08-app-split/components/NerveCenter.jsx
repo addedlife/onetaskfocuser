@@ -1881,7 +1881,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     return primaryTaskQueue.filter(t => (t.parentTask ? groups.has(t.parentTask) || !!t.pinned : !!t.pinned)).map(t => t.id);
   })());
   // No cap: the Tasks pane renders the whole queue and scrolls (ticket 3waTrsYloL01D6nFLhfW).
-  const primaryTasks = primaryTaskQueue;
   const visibleShailos = shailos.filter(Boolean);
   const timeBucket = Math.floor(nowMs / CHIEF_TIME_BUCKET_MS);
   const calendarMinuteKey = Math.floor(nowMs / 60000);
@@ -1924,16 +1923,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
         };
       });
   }, [calendarEvents, calendarMinuteKey]);
-  const specialCalendarRows = calendarRows
-    .filter(row => row.special)
-    .sort((a, b) => a.startMs - b.startMs)
-    .slice(0, 2);
-  const calendarNowInsertIndex = useMemo(() => {
-    if (!calendarRows.length) return 0;
-    const nowForIndex = calendarMinuteKey * 60000;
-    const nextIndex = calendarRows.findIndex(row => !row.past && row.startMs > nowForIndex);
-    return nextIndex === -1 ? calendarRows.length : nextIndex;
-  }, [calendarRows, calendarMinuteKey]);
   useEffect(() => {
     if (calendarEvents === null) return;
     const frame = requestAnimationFrame(() => {
@@ -1977,10 +1966,20 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // the old tap-to-cycle is gone; see CalImportanceMenu for why).
   const [openCalRateId, setOpenCalRateId] = useState(null);
 
-  // ── Needs-action ordering (v7) ─────────────────────────────────────────────
-  // Stable sorts: flagged items rise, everything else keeps its natural order,
-  // so a card never loses items — it just leads with what is waiting on you.
-  const actionMail = useMemo(() => {
+  // ── NC DISPLAY LISTS: start ────────────────────────────────────────────────
+  //  The ONLY place the five cards' contents and order are decided. Every render
+  //  branch consumes these verbatim. See docs/ops/NC_ONE_SOURCE_PLAN.md.
+  //
+  //  Needs-action ordering (v7): stable sorts, so flagged items rise and
+  //  everything else keeps its natural order — a card never loses items, it just
+  //  leads with what is waiting on you.
+  //
+  //  A branch may slice these (a cap is presentation). A branch may NOT sort,
+  //  filter or reverse them — `npm run nc:lists` fails the build if it does.
+  //  That rule exists because the mobile card used to re-derive its own task
+  //  order 400 lines from its render and 1,500 from the fix it silently undid
+  //  (tickets mEyXdMpnpv411HyWo8Eg / s0wx0jmnqGL5C4ESV4mk).
+  const ncListMail = useMemo(() => {
     const rows = [...(gmailMessages || [])];
     return rows.sort((a, b) => (mailIsUnread(b) ? 1 : 0) - (mailIsUnread(a) ? 1 : 0));
   }, [gmailMessages]);
@@ -1991,17 +1990,17 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // Pins are user-locked everywhere else in the app (01-core.js optimizeTasks
   // never reorders across them), so this card must not be the one place they are
   // advisory. Sort by weight first, then lift the pinned block on top.
-  const actionTasks = useMemo(() => {
+  const ncListTasks = useMemo(() => {
     const w = t => Number((priorities.find(p => p.id === t.priority) || {}).weight || 0);
     return orderPinnedFirst([...primaryTaskQueue].sort((a, b) => w(b) - w(a)));
   }, [primaryTaskQueue, priorities]);
-  const actionShailos = useMemo(() => {
+  const ncListShailos = useMemo(() => {
     const waiting = s => (s.status === "get_back" || s.isGetBackStep) ? 1 : 0;
     return [...visibleShailos].sort((a, b) => waiting(b) - waiting(a));
   }, [visibleShailos]);
   // Calendar keeps the REAL day (routine included) but leads with what the owner
   // rated as mattering; FYI-rated events sink rather than disappear.
-  const actionCalendar = useMemo(() => {
+  const ncListCalendar = useMemo(() => {
     const rows = calendarRows.filter(r => !r.past);
     return [...rows].sort((a, b) => {
       if (a.now !== b.now) return a.now ? -1 : 1;
@@ -2010,6 +2009,36 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
       return a.startMs - b.startMs;
     });
   }, [calendarRows, calRatings]);
+  // The agenda's three sections. Split here rather than in the branches so that
+  // "today" is the same set of rows in the same order everywhere it is drawn.
+  const ncListCalendarToday    = useMemo(() => ncListCalendar.filter(r => !r.tomorrow), [ncListCalendar]);
+  const ncListCalendarTomorrow = useMemo(() => calendarRows.filter(r => r.tomorrow), [calendarRows]);
+  const ncListCalendarPast     = useMemo(() => calendarRows.filter(r => r.past && !r.tomorrow), [calendarRows]);
+  // Clock order, today only — the desktop agenda deliberately mirrors the
+  // timeline beside it, so it reads chronologically rather than by importance.
+  const ncListCalendarClock    = useMemo(() => calendarRows.filter(r => !r.past && !r.tomorrow), [calendarRows]);
+
+  const ncLists = {
+    tasks:            ncListTasks,
+    mail:             ncListMail,
+    shailos:          ncListShailos,
+    calendar:         ncListCalendar,
+    calendarToday:    ncListCalendarToday,
+    calendarTomorrow: ncListCalendarTomorrow,
+    calendarPast:     ncListCalendarPast,
+    calendarClock:    ncListCalendarClock,
+  };
+  // The UNORDERED queues. Counts, pills, the chief/AI context and the timeline
+  // legitimately read the raw data — a different consumer with a different
+  // contract. Named so that reading one in a card body looks like the mistake
+  // it would be.
+  const ncQueues = {
+    tasksRaw:    primaryTaskQueue,
+    mailRaw:     gmailMessages || [],
+    shailosRaw:  visibleShailos,
+    calendarRaw: calendarRows,
+  };
+  // ── NC DISPLAY LISTS: end ──────────────────────────────────────────────────
 
   // ── Calm-rows v3: NO auto-prioritized hero item ────────────────────────────
   // The per-card "most important item" block (heroTask/heroMail/heroShaila/
@@ -2122,7 +2151,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]
       .filter(p => !p.deleted && !p.isShaila && p.id !== "shaila")
-      .sort((a, b) => b.weight - a.weight),
+      .sort((a, b) => b.weight - a.weight), // nc-lists-exempt: AI context weighting, never rendered as a card list
   [priorities]);
   const defaultSuggestionPriorityId = taskSuggestionPriorities.find(p => p.id === "today")?.id || taskSuggestionPriorities[0]?.id || priorities[0]?.id || "today";
   const taskSuggestionScanKey = useMemo(() => JSON.stringify({
@@ -2138,7 +2167,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     const failedRecently = item?.ncSummaryFailedSource === source && Date.now() - Number(item?.ncSummaryFailedAt || 0) < 10 * 60 * 1000;
     return item.id && source && !item.ncSummaryPending && !failedRecently && !(summary && item.ncSummarySource === source);
   };
-  const polishQueueKey = [...primaryTasks, ...visibleShailos]
+  const polishQueueKey = [...primaryTaskQueue, ...visibleShailos]
     .map(item => {
       const source = nerveSummarySource(item);
       if (!needsNervePolish(item)) return "";
@@ -2148,7 +2177,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     .join("|");
   useEffect(() => {
     if (!onPolishNerveItems || !polishQueueKey) return;
-    const items = [...primaryTasks, ...visibleShailos]
+    const items = [...primaryTaskQueue, ...visibleShailos]
       .filter(needsNervePolish)
       .map(item => ({ id: item.id, kind: isShailaWork(item) ? "shaila" : "task", source: nerveSummarySource(item) }))
       .slice(0, 8);
@@ -3304,7 +3333,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     const gmailHdr = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
     const fmtFromM = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || "").split("@")[0]; };
     const decodeSnipM = s => (s || "").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ").trim();
-    const upcomingCal = (calendarRows || []).filter(r => !r.past);
+    const upcomingCal = ncLists.calendar;
 
     const cardStyle = { minWidth: 0 }; // grid handles all sizing in both orientations
     // ── Expanding a card in LANDSCAPE (owner ticket pRxHFdM14jRsCgjzQy8G, 8/2:
@@ -3467,11 +3496,11 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             </>}
             >
             {() => {
-            const mailRest = actionMail;
+            const mailRest = ncLists.mail;
             // keep: any email row the owner has opened stays in the list even when the
             // card collapses back to its fitted height (ticket fZ3Jvr5).
             return (<>
-            {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : mailRest.map((msg,i) => {
+            {ncQueues.mailRaw.length === 0 ? emptyMsg("Inbox clear.") : mailRest.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
               const date = fmtRelM(gmailHdr(msg,"Date"));
@@ -3538,7 +3567,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               <IconBtn icon="local_drink" iconSize={14} color={C.muted} onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" />
             </>}>
             {() => {
-            const taskRest = actionTasks;
+            const taskRest = ncLists.tasks;
             return (<>
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -3553,7 +3582,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </div>
               </div>
             )}
-            {primaryTaskQueue.length === 0 && !taskComposerOpen ? emptyMsg("No open tasks.") : taskRest.map((t, ti) => {
+            {ncQueues.tasksRaw.length === 0 && !taskComposerOpen ? emptyMsg("No open tasks.") : taskRest.map((t, ti) => {
               const pri = gP(priorities, t.priority);
               const priColor = pri?.color || C.accent || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
@@ -3630,9 +3659,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                full panel, and nowhere on the card grid. */
             headerActions={<IconBtn icon="add" iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}>
             {() => {
-            const shailaRest = actionShailos;
+            const shailaRest = ncLists.shailos;
             return (<>
-            {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : shailaRest.map((s, si) => {
+            {ncQueues.shailosRaw.length === 0 ? emptyMsg("No pending shailos.") : shailaRest.map((s, si) => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
@@ -3680,15 +3709,15 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               {!calendarEvents ? (
                 <div style={{ flex:1, minHeight:0, display:"flex", alignItems:"center" }}>{emptyMsg("Loading…")}</div>
               ) : calCardView === "timeline" ? (
-                <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
+                <CalendarTimeline calendarRows={ncQueues.calendarRaw} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
               ) : (
                 <div data-agenda-scroll="true" style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden" }}>
-                  {calendarRows.filter(r => !r.tomorrow).length === 0 && calendarRows.filter(r => r.tomorrow).length === 0 ? emptyMsg("No events today.") : (() => {
+                  {ncLists.calendarToday.length === 0 && ncLists.calendarPast.length === 0 && ncLists.calendarTomorrow.length === 0 ? emptyMsg("No events today.") : (() => {
                     const cardListStyle = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
-                    const pastRows     = calendarRows.filter(r => r.past && !r.tomorrow);
+                    const pastRows     = ncLists.calendarPast;
                     // v7: importance-ordered (owner ratings) instead of clock order.
-                    const upRows       = actionCalendar.filter(r => !r.tomorrow);
-                    const tomorrowRows = calendarRows.filter(r => r.tomorrow);
+                    const upRows       = ncLists.calendarToday;
+                    const tomorrowRows = ncLists.calendarTomorrow;
                     const nlc = C.success || C.accent || "#1A9E78";
                     const NowBar = (
                       <div ref={agendaNowBarRef} style={{ display:"grid", gridTemplateColumns:"44px minmax(0,1fr)", gap:8, alignItems:"center", padding:"4px 0", margin:"0 2px" }}>
@@ -3821,7 +3850,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
     // Expanded sections scroll internally now, so show the full lists rather than a teaser.
     const taskMax = 50;
-    const topTasks = primaryTaskQueue.slice(0, taskMax);
+    const topTasks = ncLists.tasks.slice(0, taskMax);
     const tasksPreview = signalNote("Tasks");
 
     return (
@@ -3890,7 +3919,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               gridTemplateRows:    accWide ? "1fr" : "repeat(5, minmax(0,1fr))" }) }}>
 
           {/* Tasks — collapsible; open the section when the composer is invoked so it shows. */}
-          <MobileSection {...sectionCtx} id="tasks" icon="rule" title="Tasks" accentColor={C.accent} count={primaryTaskQueue.length} preview={tasksPreview}
+          <MobileSection {...sectionCtx} id="tasks" icon="rule" title="Tasks" accentColor={C.accent} count={ncQueues.tasksRaw.length} preview={tasksPreview}
             primaryBtn={<IconBtn icon="add" iconSize={14} color={C.muted} onClick={() => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority); }} title="Add task" aria-label="Add task" />}
             menuItems={[
               { icon: "list_alt",    label: "Open full queue", run: onOpenQueue },
@@ -3970,13 +3999,13 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               ]}
             >
               {() => {
-              const secCalRest = calendarRows.filter(r => !r.past);
+              const secCalRest = ncLists.calendar;
               return (<>
               {!calendarEvents ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,display:"flex",gap:8,alignItems:"center",borderTop:`1px solid ${C.divider}` }}>
                   <div style={{width:10,height:10,borderRadius:"50%",border:`2px solid ${C.faint}`,borderTopColor:"transparent",animation:"ot-spin 0.8s linear infinite"}} /> Loading…
                 </div>
-              ) : calendarRows.filter(r=>!r.past).length === 0 ? (
+              ) : ncLists.calendar.length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
               ) : secCalRest.map(row => {
                 const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
@@ -4022,7 +4051,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               ]}
             >
               {() => {
-              const secMailRest = actionMail.slice(0, 40);
+              const secMailRest = ncLists.mail.slice(0, 40);
               return (<>
               {!gmailMessages || gmailMessages.length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Inbox clear.</div>
@@ -4062,13 +4091,13 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           )}
 
           {/* Shailos */}
-          <MobileSection {...sectionCtx} id="shailos" icon="question_mark" title="Shailos" accentColor={GOLD} count={visibleShailos.length}
+          <MobileSection {...sectionCtx} id="shailos" icon="question_mark" title="Shailos" accentColor={GOLD} count={ncQueues.shailosRaw.length}
             preview={signalNote("Shailos")}
             primaryBtn={<IconBtn icon="add" iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}
             menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
           >
             {() => {
-            const secShailaRest = actionShailos.slice(0, 40);
+            const secShailaRest = ncLists.shailos.slice(0, 40);
             return (<>
             {visibleShailos.length === 0 ? (
               <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>No pending shailos.</div>
@@ -4169,7 +4198,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
         <div ref={taskGridRef} data-nc-task-grid="true" style={isStacked ? { display: "flex", overflowX: "auto", overflowY: "hidden", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none", flex: "1 1 0", minHeight: 0 } : { display: "grid", gridTemplateColumns: gridColumns, gap: touchLayout ? 16 : 0, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
-          <section style={isStacked ? { ...tintedPanel(C.accent), flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : (primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? tintedPanel(C.accent) : { ...tintedPanel(C.accent), alignSelf: "start", width: "100%" })}>
+          <section style={isStacked ? { ...tintedPanel(C.accent), flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : (ncQueues.tasksRaw.length > MIN_COLLAPSED_TASKS ? tintedPanel(C.accent) : { ...tintedPanel(C.accent), alignSelf: "start", width: "100%" })}>
             {!isStacked && (
             <div style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
@@ -4234,7 +4263,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </ActionBtn>
               ))}
               <div style={{ ...ncTaskList, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
-              {primaryTasks.length ? primaryTasks.map((t, ti) => {
+              {ncLists.tasks.length ? ncLists.tasks.map((t, ti) => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || C.accent || "#7EB0DE";
                 const isEditing = editingTaskId === t.id;
@@ -4303,7 +4332,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             <div style={{ ...ncScrollPane, ...denseListVars({ dense, primary: C.text, secondary: GOLD, hover: GOLD }), ...({ paddingTop: 6, paddingBottom: 6 }) }}>
               {/* Active shailos — open + pending get-back. Calm-rows v3: no hero row;
                   the list simply shows exactly the rows that fit, most urgent first. */}
-              {visibleShailos.length ? actionShailos.map((s, idx) => {
+              {ncLists.shailos.length ? ncLists.shailos.map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");
                 const isGetBack = s.status === "get_back" || !!s.isGetBackStep;
                 const chipLabel = isGetBack ? "Get back" : "Answer";
@@ -4423,7 +4452,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             minHeight: 0,
           };
           const nowLineColor = C.success || C.accent || "#1A9E78";
-          const hasCurrentCalendarEvent = calendarRows.some(row => row.now);
+          const hasCurrentCalendarEvent = ncQueues.calendarRaw.some(row => row.now);
           const calendarNowLine = (key = "now") => (
             <div key={key} ref={calendarNowRef} aria-label="Current time" style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "5px 0", scrollMarginBlock: "50%" }}>
               <span style={{ color: nowLineColor, fontSize: NC_TYPE.small, fontWeight: 700, textAlign: "right", fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>Now</span>
@@ -4528,14 +4557,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                         <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "row", overflow: "hidden" }}>
                         {/* ── Live timeline — Google Calendar day view ── */}
                         <div style={{ flex: "2 1 0", minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                          <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
+                          <CalendarTimeline calendarRows={ncQueues.calendarRaw} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
                         </div>
                         {/* ── Compact agenda — its own inset tonal panel so it reads as a
                              distinct surface from the live timeline, not a continuation ── */}
                         {(() => {
-                          const pastRows     = calendarRows.filter(r => r.past && !r.tomorrow);
-                          const upcomingRows = calendarRows.filter(r => !r.past && !r.tomorrow);
-                          const tomorrowRows = calendarRows.filter(r => r.tomorrow);
+                          const pastRows     = ncLists.calendarPast;
+                          const upcomingRows = ncLists.calendarClock;
+                          const tomorrowRows = ncLists.calendarTomorrow;
                           const agendaListVars = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
                           const mkAgendaItem = (row) => {
                             const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -4810,7 +4839,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     ) : (
                       <>
                       <List style={cardListStyle}>
-                      {actionMail.map((msg, i) => {
+                      {ncLists.mail.map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));

@@ -53,6 +53,13 @@ jobs:
         working-directory: apps/web
         run: npm run gm3
 
+      # NerveCenter one-render-source check. Fails if any render branch derives or
+      # re-orders its own card list instead of reading the shared NC DISPLAY LISTS
+      # block. Target is 0, not a baseline. See docs/ops/NC_ONE_SOURCE_PLAN.md.
+      - name: NerveCenter list sources
+        working-directory: apps/web
+        run: npm run nc:lists
+
       - name: Build frontend
         working-directory: apps/web
         env:
