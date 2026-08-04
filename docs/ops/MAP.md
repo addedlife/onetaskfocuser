@@ -35,7 +35,7 @@ verifies every one of them exists, and shorthand would defeat that check.
 
 | If the task is about… | Files |
 |---|---|
-| NerveCenter dashboard (the 5-card screen) | `apps/web/src/08-app-split/components/NerveCenter.jsx` — one surface, serves `nervecenter`/`chief`/`health` |
+| NerveCenter dashboard (the 5-card screen) | `apps/web/src/08-app-split/components/NerveCenter.jsx` — one surface, serves `nervecenter`/`chief`/`health`. **It renders the five cards in THREE separate branches; read `docs/ops/NC_ONE_SOURCE_PLAN.md` before changing what any card displays.** |
 | Phone column inside NerveCenter | `apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` |
 | Focus / Queue / Insights, all app state | `apps/web/src/08-app-split/App.jsx` (the orchestrator) |
 | Left rail, surface switcher | `apps/web/src/08-app-split/components/AppSuiteChrome.jsx` |
