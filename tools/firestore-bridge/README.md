@@ -1,5 +1,10 @@
 # Cloud session → Firestore bridge
 
+**Use `tools/firestore-bridge/ask.sh <tool> '<json>'` — it does everything below in
+one command, on either road, without touching your branch. Full guide, including how
+to make it instant: `docs/ops/CLOUD_ACCESS.md`. What follows is the mechanism, for
+when something breaks.**
+
 A Claude Code **cloud** session has no Firebase credential of any kind:
 
 - the admin service-account key lives only on the owner's PC,

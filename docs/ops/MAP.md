@@ -72,6 +72,20 @@ verifies every one of them exists, and shorthand would defeat that check.
 
 ## Open tickets — the two buglogs, in full, copy-paste ready
 
+**In a cloud session, stop here and run this — it needs no credential and no setup:**
+
+```bash
+tools/firestore-bridge/ask.sh list_bugs      '{"status":"unresolved","limit":50}'
+tools/firestore-bridge/ask.sh add_bug_note   '{"bugId":"…","note":"…"}'
+tools/firestore-bridge/ask.sh set_bug_status '{"bugId":"…","status":"resolved","note":"…"}'
+```
+
+That is the live Shamash buglog, read and write, from any sandbox. It is a live query,
+not the mirror doc, so it is never stale. `docs/ops/CLOUD_ACCESS.md` explains how it
+works, how to make it instant, and what else a cloud session can reach — read it only
+if the command fails. The rest of this section is the **PC** path (admin key present)
+and the RabbiMetrics buglog, which has no bridge.
+
 Two apps, two Firebase projects, two different addressing schemes. Both are below in
 full so nobody has to go looking again. Firestore MCP defaults to the wrong project, so
 always pass the **whole** resource name, starting at `projects/`.

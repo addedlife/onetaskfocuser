@@ -19,10 +19,16 @@ read `BRIEF.txt`, `AGENTS.md`, or `docs/ops/CONTEXT_INDEX.md` — they are point
 - **Fan-out research goes to a subagent** — a broad "where does X happen across the repo"
   sweep costs a separate context window and returns a summary. Do this only when the
   question is genuinely broad; a single `rg` is cheaper than an agent.
-- Open tickets: `firestore_get_document` on `users/rabbidanziger/meta/openTickets`, one
-  small doc. Never dump `users/rabbidanziger/bugs`. The mirror rebuilds only on app-side
-  changes, so it can be stale in both directions — compare `createdAtMs` to session start.
-  Re-check it before ending any session that did buglog work; the owner files bugs live.
+- **Buglog, from anywhere, one command — do not go looking for a Firebase key, there
+  isn't one:**
+  `tools/firestore-bridge/ask.sh list_bugs '{"status":"unresolved","limit":50}'`
+  Same script writes: `add_bug_note` / `set_bug_status` (`resolved` requires a note).
+  It picks the fast or slow road by itself. `docs/ops/CLOUD_ACCESS.md` is the whole
+  story — read it only if the command fails.
+  On the owner's PC the admin key is right there; use it directly and skip the script.
+- Never dump `users/rabbidanziger/bugs` — it is hundreds of documents. `list_bugs` is
+  already the safe read. Re-check open tickets before ending any session that did
+  buglog work; the owner files bugs live.
 - Keep explanations tight. No filler, no restating the request, no re-deriving settled facts.
 
 ## How work is delivered
