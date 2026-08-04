@@ -1,14 +1,14 @@
 {
-  "total": 761,
+  "total": 751,
   "byRule": {
-    "no hex color literals": 343,
+    "no hex color literals": 338,
     "no literal corner radii above 2px": 37,
     "no literal font sizes": 66,
     "use ActionBtn / IconBtn from m3": 222,
-    "use TextField from m3": 32,
+    "use TextField from m3": 27,
     "use TextField / Checkbox / Switch / Slider from m3": 49,
     "use OutlinedSelect + SelectOption from m3": 10,
     "never 'transition: all'": 2
   },
-  "updated": "2026-08-02"
+  "updated": "2026-08-04"
 }

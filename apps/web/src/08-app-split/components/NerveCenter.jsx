@@ -1111,6 +1111,112 @@ function TaskRowActions({ id, C, open, onToggle, onClose, onDone, onDelete }) {
   );
 }
 
+// ── Shared task leaves ────────────────────────────────────────────────────────
+// The composer and the task row are drawn by all three render branches. They used
+// to exist as three near-identical copies, so a fix landed in one and rotted in the
+// other two — the same failure mode as the display lists (see NC_ONE_SOURCE_PLAN.md,
+// Tier 2). Layout differences that are genuinely real (a grid cell is tighter than a
+// full-width section) are props; everything else is shared.
+//
+// Module level, not inside NerveCenter, and for a load-bearing reason: the component
+// re-renders every second on the clock tick, and a component defined inside another
+// component is a NEW type on every render, so React unmounts and remounts it — which
+// killed focus mid-typing and cancelled gestures. See the note above MobileSection.
+
+// NcTaskComposer — the "new task" textarea + save + cancel.
+function NcTaskComposer({
+  C, ncType, inputRef, value, onChange, onSave, onCancel,
+  placeholder = "New task", autoFocus = false, borderColor, saveColor = null,
+  controlPx = 32, fontSize, wrapperStyle = null,
+}) {
+  const field = (
+    <div style={{ display: "grid", gridTemplateColumns: `minmax(0,1fr) ${controlPx}px ${controlPx}px`, gap: 6, alignItems: "start" }}>
+      <textarea ref={inputRef} value={value} rows={1} autoFocus={autoFocus} placeholder={placeholder}
+        onChange={e => { onChange(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
+        onKeyDown={e => {
+          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSave(); }
+          if (e.key === "Escape") onCancel();
+        }}
+        style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${borderColor || C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: fontSize || ncType.body, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
+      <IconBtn variant="filled" icon="check" iconSize={15} containerColor={saveColor || borderColor || C.accent} color={textOnColor(saveColor || borderColor || C.accent)}
+        disabled={!value.trim()} onClick={onSave} title="Save task" aria-label="Save task" />
+      <IconBtn icon="close" iconSize={14} color={C.muted} onClick={onCancel} title="Cancel" aria-label="Cancel task entry" />
+    </div>
+  );
+  return wrapperStyle ? <div style={wrapperStyle}>{field}</div> : field;
+}
+
+// NcTaskRow — one task line: priority dot, pin glyph, text, trailing action menu,
+// and the tap-to-edit textarea it swaps to.
+//
+// `showRowActions=false` is not cosmetic: below ~320px of column the trailing 48dp
+// menu is a third of the row, so the same two actions move into the edit state
+// instead (ticket yk3jFYeI). Never add a trailing control back under 420px.
+function NcTaskRow({
+  task, C, ncType, priorities, pinned, dense = false,
+  editing, editText, onEditTextChange, onCommitEdit, onCancelEdit, onStartEdit,
+  showRowActions = true, editActions = false,
+  actionsOpen, onToggleActions, onCloseActions, onDone, onDelete,
+  editPadding = "7px 16px 7px 0", editCols = "16px minmax(0,1fr)",
+  dotMarginLeft = 0, dotMarginTop = 7, tagRow = false,
+}) {
+  const pri = gP(priorities, task.priority);
+  const priColor = pri?.color || C.accent || "#7EB0DE";
+  const rowAttrs = tagRow ? { "data-nc-task-row": "true" } : {};
+
+  if (editing) {
+    return (
+      <div key={task.id} {...rowAttrs} style={{ display: "grid", gridTemplateColumns: editCols, alignItems: "start", padding: editPadding, gap: dense ? 6 : 8 }}>
+        <span style={{ width: dense ? 6 : 8, height: dense ? 6 : 8, borderRadius: RADIUS.pill, background: priColor, flexShrink: 0, marginLeft: dotMarginLeft, marginTop: dotMarginTop }} />
+        <div style={{ minWidth: 0 }}>
+          <textarea value={editText} autoFocus rows={2}
+            onChange={e => onEditTextChange(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onCommitEdit(); }
+              if (e.key === "Escape") onCancelEdit();
+            }}
+            onBlur={onCommitEdit}
+            style={{ width: "100%", boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${priColor}`, background: C.bgSoft, color: C.text, padding: "6px 8px", fontSize: ncType.body, fontWeight: 400, fontFamily: NC_FONT_STACK, lineHeight: ncType.line, resize: "none", outline: "none" }} />
+          {/* onMouseDown rather than onClick: the textarea's onBlur commits and
+              closes the editor, which would unmount these before a click landed. */}
+          {editActions && (
+            <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+              <ActionBtn variant="text" icon="check" iconSize={18} labelColor={C.success}
+                onMouseDown={e => { e.preventDefault(); onCancelEdit(); onDone?.(); }}
+                title="Mark done" aria-label="Mark done">Done</ActionBtn>
+              <ActionBtn variant="text" icon="delete" iconSize={18} labelColor={C.danger}
+                onMouseDown={e => { e.preventDefault(); onCancelEdit(); onDelete?.(); }}
+                title="Delete task" aria-label="Delete task">Delete</ActionBtn>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div key={task.id} {...rowAttrs}>
+      <ListItem type="button" title="Click to edit" onClick={onStartEdit} style={{ borderRadius: RADIUS.sm }}>
+        <span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: priColor }} />
+        <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>
+          {/* Inline rather than a leading slot: an md-item slot costs 16px of gap
+              on every row in the list, pinned or not. */}
+          {pinned && (
+            <span title="Pinned" aria-label="Pinned" style={{ display: "inline-flex", verticalAlign: "text-bottom", marginRight: 4, color: priColor }}>
+              {suiteIcon("push_pin", 12)}
+            </span>
+          )}
+          {nerveDisplaySummary(task, "Untitled task")}
+        </span>
+        {showRowActions && (
+          <TaskRowActions id={task.id} C={C} open={actionsOpen}
+            onToggle={onToggleActions} onClose={onCloseActions} onDone={onDone} onDelete={onDelete} />
+        )}
+      </ListItem>
+    </div>
+  );
+}
+
 // The "hero" / auto-prioritized item block is GONE (owner ticket T0aqnE2h, 7/26:
 // "I DONT WANT THAT AUTOPRIORITIZED FIXED LINE ITEM THERE ANYMORE … i see them in
 // nc grid view - i asked repeatedly they be removed"). Earlier passes only moved
@@ -2716,6 +2822,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     .filter(Boolean);
   const activePri = gP(priorities, taskPriority);
   const activePriColor = activePri?.color || C.accent || "#7EB0DE";
+  const composerPriLabel = activePri?.ncLabel || "Task";
   // Owner-requested (bug log): add buttons are bare colored checkmarks — no pill
   // container. Active (composer open for that priority) gets a soft tint ring.
   // (Now expressed directly via IconBtn's active/activeBg props at each call site.)
@@ -3570,51 +3677,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             const taskRest = ncLists.tasks;
             return (<>
             {taskComposerOpen && (
-              <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
-                <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 32px 32px", gap:6, alignItems:"start" }}>
-                  <textarea ref={stackedTaskInputRef} value={taskDraft} rows={1} autoFocus
-                    onChange={e => { setTaskDraft(e.target.value); e.target.style.height="34px"; e.target.style.height=Math.min(e.target.scrollHeight,88)+"px"; }}
-                    onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addDraft(taskPriority,{mrsW:taskComposerMrsW});} if(e.key==="Escape"){setTaskComposerOpen(false);setTaskDraft("");} }}
-                    placeholder="New task"
-                    style={{ width:"100%", minWidth:0, height:34, maxHeight:88, boxSizing:"border-box", borderRadius:RADIUS.sm, border:`1px solid ${activePriColor}`, background:C.bgSoft, color:C.text, padding:"7px 10px", fontSize:ncType.body, fontFamily:NC_FONT_STACK, outline:"none", resize:"none", overflowY:"hidden" }} />
-                  <IconBtn variant="filled" icon="check" iconSize={15} containerColor={activePriColor} color="#fff" disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority,{mrsW:taskComposerMrsW})} title="Save task" aria-label="Save task" />
-                  <IconBtn icon="close" iconSize={14} color={C.muted} onClick={() => {setTaskComposerOpen(false);setTaskDraft("");}} title="Cancel" aria-label="Cancel" />
-                </div>
-              </div>
+              <NcTaskComposer C={C} ncType={ncType} inputRef={stackedTaskInputRef} value={taskDraft}
+                onChange={setTaskDraft} onSave={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })}
+                onCancel={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} autoFocus borderColor={activePriColor}
+                wrapperStyle={{ padding: "8px 12px", borderBottom: `1px solid ${C.divider}` }} />
             )}
-            {ncQueues.tasksRaw.length === 0 && !taskComposerOpen ? emptyMsg("No open tasks.") : taskRest.map((t, ti) => {
-              const pri = gP(priorities, t.priority);
-              const priColor = pri?.color || C.accent || "#7EB0DE";
-              const isEditing = editingTaskId === t.id;
-              if (isEditing) {
-                return (
-                  <div key={t.id} style={{ display:"grid", gridTemplateColumns: dense ? "12px minmax(0,1fr)" : "16px minmax(0,1fr)", alignItems:"start", padding:`${padY}px 10px ${padY}px 0`, gap: dense?6:8 }}>
-                    <span style={{ width: dense?6:8, height: dense?6:8, borderRadius:RADIUS.pill, background:priColor, flexShrink:0, marginLeft: dense?6:0, marginTop:6 }} />
-                    <div style={{ minWidth:0 }}>
-                      <textarea value={editText} autoFocus rows={2}
-                        onChange={e => setEditText(e.target.value)}
-                        onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editText.trim())onEditTask?.(t.id,editText.trim());setEditingTaskId(null);} if(e.key==="Escape")setEditingTaskId(null); }}
-                        onBlur={() => { if(editText.trim()&&editText!==t.text)onEditTask?.(t.id,editText.trim());setEditingTaskId(null); }}
-                        style={{ width:"100%", boxSizing:"border-box", borderRadius:RADIUS.sm, border:`1px solid ${priColor}`, background:C.bgSoft, color:C.text, padding:"6px 8px", fontSize:ncType.body, fontFamily:NC_FONT_STACK, lineHeight:ncType.line, resize:"none", outline:"none" }} />
-                      {/* Narrow columns carry no trailing menu on the row, so Done/Delete
-                          live here, in the row's open state — full width, and zero cost
-                          to every other line (ticket yk3jFYeI). onMouseDown rather than
-                          onClick: the textarea's onBlur commits and closes the editor,
-                          which would unmount these before a click could land. */}
-                      {!rowActionsFit && (
-                        <div style={{ display:"flex", gap:4, marginTop:4 }}>
-                          <ActionBtn variant="text" icon="check" iconSize={18} labelColor={C.success}
-                            onMouseDown={e => { e.preventDefault(); setEditingTaskId(null); onCompleteTask?.(t.id); }}
-                            title="Mark done" aria-label="Mark done">Done</ActionBtn>
-                          <ActionBtn variant="text" icon="delete" iconSize={18} labelColor={C.danger}
-                            onMouseDown={e => { e.preventDefault(); setEditingTaskId(null); onDeleteTask?.(t.id); }}
-                            title="Delete task" aria-label="Delete task">Delete</ActionBtn>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
+            {ncQueues.tasksRaw.length === 0 && !taskComposerOpen ? emptyMsg("No open tasks.") : taskRest.map(t => (
               // Row actions are one trailing menu button (see TaskRowActions) — it
               // holds ~48px instead of the ~100px two inline buttons used to cost
               // (owner tickets WUQh8VL + fZ3Jvr5), and unlike the hover overlay that
@@ -3624,30 +3692,22 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               // only when the column is wide enough to spare it; below 320px the same
               // two actions live in the row's tap-to-edit state instead. A card
               // squished by a sibling's expansion drops it for the same reason.
-              const hideRowActions = isSquished("tasks") || !rowActionsFit;
-              return (
-                <div key={t.id}>
-                  <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
-                    <span slot="start" style={{ width: 7, height: 7, borderRadius:RADIUS.pill, background:priColor }} />
-                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>
-                      {pinnedTaskIds.has(t.id) && (
-                        <span title="Pinned" aria-label="Pinned" style={{ display:"inline-flex", verticalAlign:"text-bottom", marginRight:4, color:priColor }}>
-                          {suiteIcon("push_pin", 12)}
-                        </span>
-                      )}
-                      {nerveDisplaySummary(t,"Untitled task")}
-                    </span>
-                    {!hideRowActions && (
-                      <TaskRowActions id={t.id} C={C} open={openTaskActionsId === t.id}
-                        onToggle={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
-                        onClose={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
-                        onDone={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }}
-                        onDelete={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} />
-                    )}
-                  </ListItem>
-                </div>
-              );
-            })}
+              <NcTaskRow key={t.id} task={t} dense={dense}
+                showRowActions={!(isSquished("tasks") || !rowActionsFit)} editActions={!rowActionsFit}
+                editPadding={`${padY}px 10px ${padY}px 0`} editCols={dense ? "12px minmax(0,1fr)" : "16px minmax(0,1fr)"}
+                dotMarginLeft={dense ? 6 : 0} dotMarginTop={6}
+                C={C} ncType={ncType} priorities={priorities}
+                  pinned={pinnedTaskIds.has(t.id)} editing={editingTaskId === t.id} editText={editText}
+                  onEditTextChange={setEditText}
+                  onStartEdit={() => { setEditingTaskId(t.id); setEditText(t.text); }}
+                  onCommitEdit={() => { if (editText.trim() && editText !== t.text) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); }}
+                  onCancelEdit={() => setEditingTaskId(null)}
+                  actionsOpen={openTaskActionsId === t.id}
+                  onToggleActions={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
+                  onCloseActions={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
+                  onDone={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }}
+                  onDelete={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} />
+            ))}
             </>);
             }}
           </MobileBox>
@@ -3930,58 +3990,29 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {() => {
             return (<>
             {taskComposerOpen && (
-              <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.divider}` }}>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px 32px", gap: 6, alignItems: "start" }}>
-                  <textarea ref={stackedTaskInputRef} value={taskDraft} rows={1} autoFocus
-                    onChange={e => { setTaskDraft(e.target.value); e.target.style.height="34px"; e.target.style.height=Math.min(e.target.scrollHeight,88)+"px"; }}
-                    onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addDraft(taskPriority,{mrsW:taskComposerMrsW});} if(e.key==="Escape"){setTaskComposerOpen(false);setTaskDraft("");} }}
-                    placeholder="New task"
-                    style={{ width:"100%",minWidth:0,height:34,maxHeight:88,boxSizing:"border-box",borderRadius:RADIUS.sm,border:`1px solid ${activePriColor}`,background:C.bgSoft,color:C.text,padding:"7px 10px",fontSize:ncType.body,fontFamily:NC_FONT_STACK,outline:"none",resize:"none",overflowY:"hidden" }} />
-                  <IconBtn variant="filled" icon="check" iconSize={15} containerColor={activePriColor} color="#fff" disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority,{mrsW:taskComposerMrsW})} title="Save task" aria-label="Save task" />
-                  <IconBtn icon="close" iconSize={14} color={C.muted} onClick={() => {setTaskComposerOpen(false);setTaskDraft("");}} title="Cancel" aria-label="Cancel" />
-                </div>
-              </div>
+              <NcTaskComposer C={C} ncType={ncType} inputRef={stackedTaskInputRef} value={taskDraft}
+                onChange={setTaskDraft} onSave={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })}
+                onCancel={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} autoFocus borderColor={activePriColor}
+                wrapperStyle={{ padding: "8px 12px", borderBottom: `1px solid ${C.divider}` }} />
             )}
             {topTasks.length === 0 && !taskComposerOpen && <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK }}>No open tasks.</div>}
-            {topTasks.map((t, ti) => {
-              const pri = gP(priorities, t.priority);
-              const priColor = pri?.color || C.accent || "#7EB0DE";
-              const isEditing = editingTaskId === t.id;
-              if (isEditing) {
-                return (
-                  <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"16px minmax(0,1fr)",alignItems:"start",padding:"4px 12px 4px 0",gap:8 }}>
-                    <span style={{ width: dense?6:8,height: dense?6:8,borderRadius:RADIUS.pill,background:priColor,flexShrink:0,marginLeft: dense?5:0,marginTop:6 }} />
-                    <textarea value={editText} autoFocus rows={2}
-                      onChange={e => setEditText(e.target.value)}
-                      onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editText.trim())onEditTask?.(t.id,editText.trim());setEditingTaskId(null);} if(e.key==="Escape")setEditingTaskId(null); }}
-                      onBlur={() => { if(editText.trim()&&editText!==t.text)onEditTask?.(t.id,editText.trim());setEditingTaskId(null); }}
-                      style={{ width:"100%",boxSizing:"border-box",borderRadius:RADIUS.sm,border:`1px solid ${priColor}`,background:C.bgSoft,color:C.text,padding:"6px 8px",fontSize:ncType.body,fontFamily:NC_FONT_STACK,lineHeight:ncType.line,resize:"none",outline:"none" }} />
-                  </div>
-                );
-              }
+            {topTasks.map(t => (
               // Same trailing action menu as the card grid — one 48dp target that
               // opens an anchored M3 menu, never an overlay on top of the row.
-              return (
-                <div key={t.id}>
-                  <ListItem data-nc-task-row="true" type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
-                    <span slot="start" style={{ width: 7,height: 7,borderRadius:RADIUS.pill,background:priColor }} />
-                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>
-                      {pinnedTaskIds.has(t.id) && (
-                        <span title="Pinned" aria-label="Pinned" style={{ display:"inline-flex", verticalAlign:"text-bottom", marginRight:4, color:priColor }}>
-                          {suiteIcon("push_pin", 12)}
-                        </span>
-                      )}
-                      {nerveDisplaySummary(t,"Untitled task")}
-                    </span>
-                    <TaskRowActions id={t.id} C={C} open={openTaskActionsId === t.id}
-                      onToggle={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
-                      onClose={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
-                      onDone={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }}
-                      onDelete={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} />
-                  </ListItem>
-                </div>
-              );
-            })}
+              <NcTaskRow key={t.id} task={t} dense={dense} tagRow
+                editPadding="4px 12px 4px 0" dotMarginLeft={dense ? 5 : 0} dotMarginTop={6}
+                C={C} ncType={ncType} priorities={priorities}
+                  pinned={pinnedTaskIds.has(t.id)} editing={editingTaskId === t.id} editText={editText}
+                  onEditTextChange={setEditText}
+                  onStartEdit={() => { setEditingTaskId(t.id); setEditText(t.text); }}
+                  onCommitEdit={() => { if (editText.trim() && editText !== t.text) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); }}
+                  onCancelEdit={() => setEditingTaskId(null)}
+                  actionsOpen={openTaskActionsId === t.id}
+                  onToggleActions={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
+                  onCloseActions={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
+                  onDone={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }}
+                  onDelete={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} />
+            ))}
             </>);
             }}
           </MobileSection>
@@ -4230,31 +4261,21 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </div>
               </div>
               {taskComposerOpen && (
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 30px 30px", gap: 6, alignItems: "start" }}>
-                  <textarea ref={taskInputRef} value={taskDraft} rows={1}
-                    onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
-                    placeholder={taskComposerMrsW ? "Mrs W task" : `${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
-                    style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.meta, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
-                  <IconBtn variant="filled" icon="check" iconSize={15} containerColor={taskComposerMrsW ? "#A8D8B9" : activePriColor} color={taskComposerMrsW ? "#123D25" : textOnColor(activePriColor)} disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} title="Save task" aria-label="Save task" />
-                  <IconBtn icon="close" iconSize={14} color={C.muted} onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel" aria-label="Cancel task entry" />
-                </div>
+                <NcTaskComposer C={C} ncType={ncType} inputRef={taskInputRef} value={taskDraft}
+                  onChange={setTaskDraft} onSave={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })}
+                  onCancel={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} controlPx={30} fontSize={ncType.meta}
+                  borderColor={C.divider} saveColor={taskComposerMrsW ? "#A8D8B9" : activePriColor}
+                  placeholder={taskComposerMrsW ? "Mrs W task" : `${composerPriLabel} task`} />
               )}
             </div>
             )}
             <div style={ncTaskBody}>
               {isStacked && (taskComposerOpen ? (
-                <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px 32px", gap: 6, alignItems: "start" }}>
-                    <textarea ref={stackedTaskInputRef} value={taskDraft} rows={1} autoFocus
-                      onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
-                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
-                      placeholder={`${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
-                      style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${activePriColor}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.body, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
-                    <IconBtn variant="filled" icon="check" iconSize={15} containerColor={activePriColor} color={textOnColor(activePriColor)} disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} title="Save" aria-label="Save task" />
-                    <IconBtn icon="close" iconSize={14} color={C.muted} onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel" aria-label="Cancel" />
-                  </div>
-                </div>
+                <NcTaskComposer C={C} ncType={ncType} inputRef={stackedTaskInputRef} value={taskDraft}
+                  onChange={setTaskDraft} onSave={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })}
+                  onCancel={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} autoFocus borderColor={activePriColor}
+                  placeholder={`${composerPriLabel} task`}
+                  wrapperStyle={{ padding: "10px 14px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }} />
               ) : (
                 <ActionBtn variant="text" icon="add" iconSize={17} labelColor={C.faint} labelSize={ncType.body}
                   onClick={() => openTaskComposer(taskPriority)}
@@ -4263,54 +4284,25 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </ActionBtn>
               ))}
               <div style={{ ...ncTaskList, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
-              {ncLists.tasks.length ? ncLists.tasks.map((t, ti) => {
-                const pri = gP(priorities, t.priority);
-                const priColor = pri?.color || C.accent || "#7EB0DE";
-                const isEditing = editingTaskId === t.id;
-                const actionsOpen = openTaskActionsId === t.id;
-                const displayText = nerveDisplaySummary(t, "Untitled task");
-                // Editing → inline textarea (unchanged behavior). Otherwise a genuine
-                // md-list-item with the shared trailing action menu.
-                if (isEditing) {
-                  return (
-                    <div key={t.id} data-nc-task-row="true" style={{ display: "grid", gridTemplateColumns: "16px minmax(0,1fr)", alignItems: "start", padding: "7px 16px 7px 0", gap: 8 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, background: priColor, flexShrink: 0, marginTop: 7 }} />
-                      <textarea value={editText} autoFocus rows={2}
-                        onChange={e => setEditText(e.target.value)}
-                        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (editText.trim()) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); } if (e.key === "Escape") setEditingTaskId(null); }}
-                        onBlur={() => { if (editText.trim() && editText !== t.text) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); }}
-                        style={{ width: "100%", boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${priColor}`, background: C.bgSoft, color: C.text, padding: "6px 8px", fontSize: ncType.body, fontWeight: 400, fontFamily: NC_FONT_STACK, resize: "none", outline: "none", lineHeight: ncType.line }} />
-                    </div>
-                  );
-                }
+              {ncLists.tasks.length ? ncLists.tasks.map(t => (
                 // One trailing menu button on every pointer type. The old split — a
                 // floating Done/Delete panel on hover for mouse, an expanding strip
                 // for touch — put an opaque card ON the row it belonged to, hiding
                 // the text being acted on (owner ticket 8Ooq97WA), and pushed the
                 // rows below it down when the touch strip opened.
-                return (
-                  <div key={t.id} data-nc-task-row="true">
-                    <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
-                      <span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: priColor }} />
-                      <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>
-                        {/* Inline rather than a leading slot: an md-item slot costs
-                            16px of gap on every row in the list, pinned or not. */}
-                        {pinnedTaskIds.has(t.id) && (
-                          <span title="Pinned" aria-label="Pinned" style={{ display: "inline-flex", verticalAlign: "text-bottom", marginRight: 4, color: priColor }}>
-                            {suiteIcon("push_pin", 12)}
-                          </span>
-                        )}
-                        {displayText}
-                      </span>
-                      <TaskRowActions id={t.id} C={C} open={actionsOpen}
-                        onToggle={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
-                        onClose={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
-                        onDone={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }}
-                        onDelete={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} />
-                    </ListItem>
-                  </div>
-                );
-              }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
+                <NcTaskRow key={t.id} task={t} dense={dense} tagRow
+                  C={C} ncType={ncType} priorities={priorities}
+                  pinned={pinnedTaskIds.has(t.id)} editing={editingTaskId === t.id} editText={editText}
+                  onEditTextChange={setEditText}
+                  onStartEdit={() => { setEditingTaskId(t.id); setEditText(t.text); }}
+                  onCommitEdit={() => { if (editText.trim() && editText !== t.text) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); }}
+                  onCancelEdit={() => setEditingTaskId(null)}
+                  actionsOpen={openTaskActionsId === t.id}
+                  onToggleActions={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
+                  onCloseActions={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
+                  onDone={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }}
+                  onDelete={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} />
+              )) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
               </div>
 
             </div>
