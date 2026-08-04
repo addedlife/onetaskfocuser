@@ -1,6 +1,8 @@
 # NerveCenter — one render source
 
-**Status:** Tier 1 and Tier 2 approved in principle (owner, 2026-08-04). Tier 3 on hold.
+**Status:** Tiers 1 and 2 **shipped** 2026-08-04 (4.114.14, 4.114.15). Tier 3 hold lifted by
+the owner the same day ("do it now, all 3 in one pass") and its structural half shipped as
+4.114.16 — see §6 for exactly what landed, what did not, and why.
 **Owner ask, verbatim:** *"maybe the different card formats should always pull from same
 render source — it's just a card resize shouldn't need new structures, check industry
 standard."*
@@ -217,26 +219,65 @@ matters more than usual here.
 
 ---
 
-## 6. Tier 3 — one tree (ON HOLD, owner decision)
+## 6. Tier 3 — one tree (partially shipped 2026-08-04, 4.114.16)
 
-The end state the owner described: one render, layout differences expressed in CSS
-container queries (`@container`, where an element styles itself by its own width rather
-than the window's), so a resize genuinely is only a resize.
+The owner lifted the hold and asked for all three tiers in one pass. What that turned into,
+honestly reported, because the answer is more interesting than "done":
 
-**Why it is held rather than dropped:** it is a rewrite of the largest screen in the app,
-and the tablet portrait/landscape behaviour was only just tuned (tickets
-`tbtjtb55bwkBM38cIxfw`, `pRxHFdM14jRsCgjzQy8G`, both still device-unverified). Doing it
-before Tiers 1–2 means rewriting 1,790 lines instead of the ~900 that will remain.
+### What shipped
 
-**Revisit when:** Tier 2 is complete and the tablet layouts have been confirmed on a real
-device. At that point write a fresh plan — do not treat this section as approved.
+**One card shell.** `MobileSection` and `MobileBox` are gone, replaced by one `NcCard`.
+They were two components drawing the same anatomy — `[icon] [title] [count] [caption]
+[actions] [expand]` over a scrolling body — that had drifted into different DOM, two
+different action APIs (JSX elements vs `{icon,label,run}` descriptors) and two different
+body-scroll rules. `NcCard` renders one structure; `variant="card" | "section"` selects a
+metric set (`NC_CARD_METRICS`) and nothing else. Adding a control to a card header is now
+one edit, in one place, and it appears in every layout.
 
-Sketch only: keep the three branch *conditions* as a single `layout` value
-(`"grid" | "stack" | "columns"`), render one card list, and let each card's internals
-respond to its own container width. The desktop 5-column view may legitimately keep a
-structural fork; that is a finding for that plan, not a failure of it.
+**One layout value.** `ncLayout` (`"grid" | "stack" | "columns"`) is computed once, next to
+`isStacked`, and the three render branches key off it. The two conditions are no longer
+re-spelled 500 lines apart. This also settles §8's open question: `isMobileDevice` and
+`desktopLayout === "boxes"` share a branch **deliberately** — "boxes" exists precisely so a
+desktop can opt into the device layout — and the named value is what makes that legible.
 
----
+### What did NOT ship, and the finding behind it
+
+**Container queries were evaluated and rejected for this screen.** The plan's sketch assumed
+layout differences could move into `@container` rules. They cannot, and the reason is worth
+writing down because it will come up again:
+
+> Every remaining width-driven difference in NerveCenter changes **what renders**, not how
+> it looks — whether a row carries a trailing action menu at all, whether Done/Delete move
+> into the row's edit state (ticket `yk3jFYeI`), whether the header's actions fold behind one
+> overflow button. CSS can only restyle elements that are already in the DOM, so expressing
+> these as container queries would mean rendering both sets of controls and hiding one. That
+> duplicates every action's aria-label and touch target — worse for screen readers and worse
+> for the thumb, to win a stylistic point.
+
+Container queries are the right tool where the difference genuinely is cosmetic, and this
+codebase already uses them there (`10-deskphone-web.jsx`). Here the fork that remains is by
+**role**, not by width, and a prop is the honest way to say so.
+
+**The card bodies are still forked.** `NcCard` unified the *shells*. Inside them, the grid
+branch and the stacked branch still write their own body markup for Mail, Shailos, Calendar
+and Phone (the task rows are shared — Tier 2). That is the remaining ~700 lines and the real
+Tier 3 tail.
+
+**The desktop 5-column tree stays forked**, as this plan predicted it might. It is a
+genuinely different information architecture — resizable panes, the live timeline, the email
+reader pane — not a wider version of the same card.
+
+### What is left
+
+1. Share the four remaining card bodies between the grid and stacked branches, one card per
+   commit, the way the task row was done. Highest value: Mail and Calendar, which carry the
+   most duplicated markup.
+2. Confirm the tablet portrait/landscape layouts on a real device (tickets
+   `tbtjtb55bwkBM38cIxfw`, `pRxHFdM14jRsCgjzQy8G` are still device-unverified). Do this
+   before touching the bodies, not after — that was the original reason for the hold and it
+   has not been discharged, only overtaken.
+3. Only then decide whether the desktop column tree is worth merging at all. The honest
+   default is no.
 
 ## 7. Release protocol for this work
 
@@ -261,5 +302,6 @@ Standing rules, repeated because this work is many small pushes:
   simpler, not harder — one list, no weighting.
 - That the desktop 5-column layout keeps a structural fork. Assumed yes through Tier 2;
   Tier 3 decides properly.
-- That `isMobileDevice` and `desktopLayout === "boxes"` should keep sharing one branch.
-  They do today. Nobody has checked whether that is deliberate or accretion.
+- ~~That `isMobileDevice` and `desktopLayout === "boxes"` should keep sharing one branch.~~
+  **Settled 2026-08-04:** deliberate. "boxes" is the desktop opt-in to the device layout;
+  `ncLayout` now names it.

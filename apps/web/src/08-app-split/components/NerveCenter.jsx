@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, Store, textOnColor } from '../../01-core.js';
-import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth, useWindowSizeClass } from '../ui-tokens.jsx';
+import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, SP, suiteIcon, TRANSITION, useViewportWidth, useWindowSizeClass } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, Divider, Menu, MenuItem, OutlinedSelect, SelectOption, TextField } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
@@ -823,64 +823,212 @@ const agendaNowBarRef = el => {
 // stay open. When expanded the content scrolls internally so the page stays bounded.
 // `keepMounted` hides via display:none so embedded pollers (Phone) keep running while
 // collapsed. State arrives via props (expandedIds/menuId + the on* callbacks).
-function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, fullHeight = false, children, C, expandedIds, menuId, onExpand, onMenuToggle, onMenuClose, dense = false }) {
-  const expanded = !expandable || !!expandedIds?.has(id);
-  const sectionScrollRef = useRef(null);
-  const menuOpen = menuId === id;
-  const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
-  const tint = hexToRgba(accentColor, 0.05);
-  // fullHeight: fills its grid cell in the 5-column layout (flex:1, no maxHeight cap).
-  // Normal: capped so stacked accordion sections don't grow the page unbounded.
-  // backgroundColor:inherit so the sticky "+N more" bar (MoreRow) picks up this
-  // section's tinted surface rather than a flat C.bg that would read as a seam.
-  const scrollStyle = fullHeight
-    ? { flex: "1 1 0", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", backgroundColor: "inherit" }
-    : { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", backgroundColor: "inherit" };
+// ── NcCard — the one card shell ───────────────────────────────────────────────
+//
+// This replaces MobileSection and MobileBox, which were two components drawing
+// the same thing: [icon] [title] [count] [caption] [actions] [expand], over a
+// scrolling body. They had diverged into different DOM, different action APIs
+// (JSX elements vs {icon,label,run} descriptors) and different body-scroll rules,
+// so a fix to a card header landed in one layout and rotted in the other — the
+// same failure mode as the display lists. Owner ask, 8/4: "a card resize
+// shouldn't need new structures."
+//
+// There is now ONE structure. `variant` selects a metric set, nothing more:
+//   "card"    — a grid cell or a desktop column: 56px header, 22px accent icon,
+//               title type, accent-tinted count, summary line, expand-to-page.
+//   "section" — a full-width row in the stacked accordion: 28px header, 16px
+//               muted icon, body type, neutral count, inline caption, chevron.
+// Both draw the same elements in the same order. Adding a control adds it once.
+//
+// Why the metric fork is a prop and not a CSS container query: every remaining
+// width-driven difference in this screen changes WHAT RENDERS, not how it looks —
+// whether the row carries a trailing menu at all, whether the actions move into
+// the row's edit state (ticket yk3jFYeI). A container query can only restyle
+// elements that are already in the DOM, so expressing these in CSS would mean
+// rendering both sets of controls and hiding one, which duplicates every action's
+// aria-label and touch target. The fork that remains is by ROLE, not by width,
+// and a prop is the honest way to say that. (Container queries are used in this
+// codebase where the difference genuinely is cosmetic — see 10-deskphone-web.jsx.)
+const NC_CARD_METRICS = {
+  card: {
+    root: { minHeight: 0 },
+    header: { minHeight: 56 },
+    listVars: {
+      '--md-list-item-one-line-container-height': '48px',
+      '--md-list-item-two-line-container-height': '56px',
+      '--md-list-item-top-space': '6px', '--md-list-item-bottom-space': '6px',
+      '--md-list-item-leading-space': '16px', '--md-list-item-trailing-space': '8px',
+    },
+    iconBox: 24, iconSize: 22, iconTone: "accent",
+    titleSize: NC_TYPE.title, titleWeight: 650, titleSpacing: "-0.01em",
+    countTone: "accent", captionSlot: "supporting-text",
+    expandIcon: e => e ? "close_fullscreen" : "expand_content", expandSize: 12,
+    surfaceMix: 94,
+  },
+  section: {
+    root: {},
+    header: { minHeight: 28, gap: 6, padding: "4px 8px 4px 10px" },
+    listVars: {
+      '--md-list-item-one-line-container-height': '28px',
+      '--md-list-item-leading-space': '0px', '--md-list-item-trailing-space': '0px',
+      '--md-list-item-top-space': '0px', '--md-list-item-bottom-space': '0px',
+    },
+    iconBox: 22, iconSize: 16, iconTone: "muted",
+    titleSize: NC_TYPE.body, titleWeight: 600, titleSpacing: 0,
+    countTone: "neutral", captionSlot: "inline",
+    expandIcon: () => "expand_more", expandSize: 18,
+    surfaceMix: 94,
+  },
+};
+
+// headerScrolls: the card's header travels with its list instead of being frozen
+// above it (owner ticket tbtjtb55bwkBM38cIxfw, 8/2: "Get rid of sticky headers is
+// nc tablet portrait and lanscape. It wastes scrollable area and causes misfire
+// taps"). He is right on both counts. Five cards each holding a 56px header out
+// of the scroll spend ~280px of a tablet screen on chrome that never changes, and
+// a frozen bar sitting exactly where a thumb lands while scrolling a list is a
+// misfire waiting to happen — the header is a button (it expands the card).
+// It stays frozen in the 5-column desktop layout, where the header is the
+// column's identity and the column is tall enough not to care.
+//
+// narrowActions: below ~480px of column the card's own actions collapse behind
+// ONE overflow button, so every header costs the same single row no matter how
+// many actions the card carries. Uniform iconography, one tap away.
+//
+// Hoisted to module scope, and that is load-bearing: NerveCenter re-renders on a
+// per-second clock tick, and a component declared inside another component is a
+// new type on every render, so React remounts it — which killed focus mid-typing
+// and cancelled scroll gestures.
+function NcCard({
+  id, icon, title, accentColor, C, children, style,
+  variant = "card", dense = false,
+  count = null, caption = null,
+  actions = null, headerActions = null, narrowActions = false,
+  expandable = true, expanded = false, collapsed = false, onToggleExpand = null, onOpen = null,
+  keepMounted = false, fullHeight = false, headerScrolls = false, statusDot = null,
+  menuOpen = false, onMenuToggle = null, onMenuClose = null,
+}) {
+  const M = NC_CARD_METRICS[variant] || NC_CARD_METRICS.card;
+  const bodyRef = useRef(null);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const accent = accentColor || C.accent;
+
+  // The body always scrolls. It used to be `scrollable ? "auto" : "hidden"`, on
+  // the theory that the fitted row count means there is never anything to scroll
+  // to. Measured on a 1280x800 tablet that is not true — the Mail card's "+N more"
+  // chip is appended AFTER the fitted rows and was never part of the fit — so the
+  // card clipped content with no scroll and no way to reach it (owner: "won't
+  // scroll in card"). `auto` costs nothing when the fit is exact.
+  const bodyScroll = variant === "section"
+    ? (fullHeight
+        ? { flex: "1 1 0", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", backgroundColor: "inherit" }
+        // Capped so stacked accordion sections don't grow the page unbounded.
+        : { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", backgroundColor: "inherit" })
+    : { flex: 1, minHeight: 0, overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", paddingBottom: 4, backgroundColor: "inherit" };
+
+  const body = (
+    <div ref={bodyRef}
+      style={{
+        ...bodyScroll,
+        ...(variant === "section" ? { paddingTop: 6, paddingBottom: 6 } : {}),
+        // In headerScrolls mode the CARD is the scroller; a second scrolling box
+        // inside it would trap the gesture and leave the header frozen anyway.
+        ...(headerScrolls ? { flex: "0 0 auto", overflowY: "visible", overscrollBehavior: "auto" } : {}),
+        ...(collapsed || (!expanded && expandable && variant === "section") ? { display: "none" } : {}),
+      }}>
+      {typeof children === "function" ? children() : children}
+    </div>
+  );
+
+  const showBody = collapsed || keepMounted || variant === "card" || !expandable || expanded;
+
   return (
-    <div style={{ background: `color-mix(in srgb, ${C.bg} 94%, ${accentColor || C.accent} 6%)`, borderRadius: RADIUS.lg, overflow: "hidden",
-      ...(fullHeight ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : {}) }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 10px", minHeight: 28 }}>
+    <div data-nc-feed={variant === "card" ? "true" : undefined} data-nc-card={id}
+      style={{
+        position: "relative", background: `color-mix(in srgb, ${C.bg} ${M.surfaceMix}%, ${accent} ${100 - M.surfaceMix}%)`,
+        borderRadius: RADIUS.lg, overflow: "hidden", display: "flex", flexDirection: "column", minWidth: 0,
+        ...M.root,
+        ...(variant === "section" && !fullHeight ? { display: "block" } : {}),
+        ...(fullHeight ? { flex: 1, minHeight: 0 } : {}),
+        ...(headerScrolls ? { overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } : {}),
+        ...style,
+      }}>
+
+      {/* ONE header row, always, at ONE height per variant. It used to switch to a
+          column so action buttons wrapped underneath the title — but only the two
+          cards that HAVE actions wrapped, so in the five-column view two columns
+          started their list a row lower than the other three (owner: "Columns on
+          widescreens didn't have consistent tops"). The height is pinned rather
+          than left to the list item, because a card whose summary is empty renders
+          a one-line item and would sit 8px shorter than its neighbours — the same
+          ragged top by another route. */}
+      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%", flexShrink: 0, minWidth: 0, overflow: "visible", ...M.header }}>
         <ListItem type="button"
-          onClick={expandable ? () => onExpand(id) : undefined}
-          aria-expanded={expandable ? expanded : undefined}
+          onClick={onToggleExpand || onOpen || undefined}
+          title={title} aria-label={title}
+          aria-expanded={(onToggleExpand || (expandable && variant === "section")) ? expanded : undefined}
           style={{
-            flex: 1, minWidth: 0, cursor: expandable ? "pointer" : "default",
-            ...denseListVars({ dense: true }),
-            '--md-list-item-one-line-container-height': '28px',
-            '--md-list-item-leading-space': '0px', '--md-list-item-trailing-space': '0px',
-            '--md-list-item-top-space': '0px', '--md-list-item-bottom-space': '0px',
+            flex: 1, minWidth: 0, cursor: (onToggleExpand || onOpen) ? "pointer" : "default",
+            ...(variant === "section" ? denseListVars({ dense: true }) : {}),
+            ...M.listVars,
           }}>
-          <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, color: C.muted, flexShrink: 0 }}>{suiteIcon(icon, 16)}</span>
+          <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: M.iconBox, height: M.iconBox, color: M.iconTone === "accent" ? accent : C.muted, flexShrink: 0 }}>
+            {suiteIcon(icon, M.iconSize)}
+          </span>
           <div slot="headline" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0 }}>{title}</span>
-            {count > 0 && <span style={{ fontSize: NC_TYPE.small, fontWeight: 500, color: C.faint, fontFamily: NC_MONO_STACK, background: C.hover, borderRadius: RADIUS.pill, padding: "1px 6px", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{count}</span>}
-            {preview != null && preview !== "" && (
-              // Small single-line caption next to the title — visible in every layout (incl. the
-              // always-expanded mobile sections), kept to one line so it never pushes card
-              // content (emails, events) down.
-              <span style={{ fontSize: NC_TYPE.small, lineHeight: 1.2, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{preview}</span>
+            <span style={{ fontSize: M.titleSize, fontWeight: M.titleWeight, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: M.titleSpacing, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
+            {/* Live total — the guarantee that nothing is hidden or forgotten even
+                when only the first few rows fit on screen. */}
+            {count > 0 && (M.countTone === "accent"
+              ? <span style={{ flexShrink: 0, minWidth: 22, height: 20, padding: "0 7px", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: RADIUS.pill, background: softBg(accent, 0.18), color: accent, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.meta, fontWeight: 700, lineHeight: 1 }}>{count}</span>
+              : <span style={{ fontSize: NC_TYPE.small, fontWeight: 500, color: C.faint, fontFamily: NC_MONO_STACK, background: C.hover, borderRadius: RADIUS.pill, padding: "1px 6px", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{count}</span>)}
+            {/* Caption in the header, one line, so it never pushes card content down. */}
+            {M.captionSlot === "inline" && caption != null && caption !== "" && (
+              <span style={{ fontSize: NC_TYPE.small, lineHeight: 1.2, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{caption}</span>
             )}
           </div>
-          {expandable && (
-            <span slot="end" style={{ color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 18)}</span>
+          {M.captionSlot === "supporting-text" && caption && (
+            <div slot="supporting-text" style={{ fontSize: NC_TYPE.body, color: C.muted, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{caption}</div>
+          )}
+          {(onToggleExpand || (expandable && variant === "section")) && (
+            <span slot="end" style={{ display: "flex", color: expanded ? C.muted : C.faint, flexShrink: 0, ...(variant === "section" ? { transform: expanded ? "rotate(180deg)" : "none", transition: TRANSITION.fast } : {}) }}>
+              {suiteIcon(M.expandIcon(expanded), M.expandSize)}
+            </span>
           )}
         </ListItem>
-        {primaryBtn}
-        {menuItems?.length > 0 && (
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            <IconBtn icon="more_vert" iconSize={15} color={C.faint} onClick={e => { e.stopPropagation(); onMenuToggle(id); }} aria-label={`${title} menu`} />
 
+        {/* Inline controls the card brings itself (account pickers, view toggles). */}
+        {narrowActions && headerActions ? (
+          <span style={{ position: "relative", display: "flex", alignItems: "center", flexShrink: 0, marginRight: 2 }}>
+            <IconBtn icon="more_vert" iconSize={16} color={overflowOpen ? C.accent : C.faint}
+              onClick={() => setOverflowOpen(o => !o)}
+              title={`${title} actions`} aria-label={`${title} actions`} aria-expanded={overflowOpen} />
+            {overflowOpen && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setOverflowOpen(false)} />
+                <span style={{ position: "absolute", top: "100%", right: 0, zIndex: 9101, display: "flex", alignItems: "center", gap: 2, padding: 4, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, boxShadow: ELEV[3] }}>
+                  {headerActions}
+                </span>
+              </>
+            )}
+          </span>
+        ) : headerActions ? (
+          <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, marginRight: 2 }}>{headerActions}</span>
+        ) : null}
+
+        {/* Declarative action list — always an anchored overflow menu, never a row
+            of bespoke buttons. Same order and iconography on every card. */}
+        {actions?.length > 0 && (
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <IconBtn icon="more_vert" iconSize={15} color={C.faint}
+              onClick={e => { e.stopPropagation(); onMenuToggle?.(id); }} aria-label={`${title} menu`} />
             {menuOpen && (
               <>
                 <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={onMenuClose} />
                 <div style={{ position: "absolute", right: 0, top: 28, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 168, boxShadow: ELEV[3], overflow: "hidden" }}>
-                  {menuItems.map((item, i) => (
-                    <ListItem key={i} type="button" onClick={() => { onMenuClose(); item.run?.(); }}
-                      style={{
-                        width: "100%", borderBottom: i < menuItems.length - 1 ? `1px solid ${C.divider}` : "none",
-                        color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK,
-                        ...denseListVars({ dense: true }),
-                      }}>
+                  {actions.map((item, i) => (
+                    <ListItem key={i} type="button" onClick={() => { onMenuClose?.(); item.run?.(); }}
+                      style={{ width: "100%", borderBottom: i < actions.length - 1 ? `1px solid ${C.divider}` : "none", color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, ...denseListVars({ dense: true }) }}>
                       <span slot="start" style={{ display: "flex" }}>{suiteIcon(item.icon || "arrow_forward", 14)}</span>
                       <div slot="headline">{item.label}</div>
                     </ListItem>
@@ -890,181 +1038,17 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
             )}
           </div>
         )}
+
+        {onToggleExpand && onOpen && (
+          <IconBtn icon="open_in_new" iconSize={13} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ marginRight: 4 }} />
+        )}
       </div>
-      {/* Preview shown inline in the header — no second body row needed. */}
-      {/* No hero/auto-prioritized block: the list starts at its first real row. */}
-      {keepMounted
-        ? <div ref={sectionScrollRef} style={expanded ? { ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) } : { display: "none" }}>{typeof children === "function" ? children() : children}</div>
-        : (expanded && <div ref={sectionScrollRef} style={{ ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) }}>{typeof children === "function" ? children() : children}</div>)}
-    </div>
-  );
-}
 
-// Mobile phone/tablet "box": borderless-ish surface tinted subtly toward the category color
-// (so cards are differentiable without clashing). The top line is the card's identity AND
-// its summary: a pinned [colored icon chip + chief summary] row. Once the card's content is
-// scrolled, that summary line collapses away into just the icon to reclaim space; tapping
-// the row opens the full surface. Hoisted to module scope for stable identity.
-// expanded/collapsed/onToggleExpand: card-level expand-to-page (mobile rows orientation).
-// When onToggleExpand is provided the header tap toggles expand instead of opening the full
-// surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
-// header only (content hidden via display:none so embedded pollers — Phone — keep running).
-// headerScrolls: the card's header travels with its list instead of being frozen
-// above it (owner ticket tbtjtb55bwkBM38cIxfw, 8/2: "Get rid of sticky headers is
-// nc tablet portrait and lanscape. It wastes scrollable area and causes misfire
-// taps"). He is right on both counts. Five cards each holding a 56px header out
-// of the scroll spend ~280px of a tablet screen on chrome that never changes, and
-// a frozen bar sitting exactly where a thumb lands while scrolling a list is a
-// misfire waiting to happen — the header is a button (it expands the card).
-// Scrolling it with the content costs nothing: it is back at the top of the list,
-// one flick away, and every pixel it was holding goes to rows.
-//
-// It stays frozen in the 5-column desktop layout, where the header is the
-// column's identity and the column is tall enough not to care.
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, count = null, narrowActions = false, headerScrolls = false }) {
-  const scrollRef = useRef(null);
-  const tint = hexToRgba(accentColor, 0.05);
-  const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
-  // The scroll-away header (and the bottom "more content" fade gradient that sat
-  // beside it) only ever rendered on the pre-GM3 path and went with it. M3's feed
-  // layout keeps the card header always visible, and clips the list cleanly at the
-  // padded container edge with the "+N more" row as the more-content affordance.
-  // Removing them also removes a ResizeObserver and a per-scroll setState that had
-  // no remaining consumer — the state was still being written on every scroll and
-  // re-rendering the card to produce an identical tree.
-  //
-  // There is now exactly ONE header layout. The 5-column card grid used to get a
-  // second, `stickyHeader` variant: tighter metrics, a hard borderBottom rule, and
-  // its action buttons on a dedicated second row. Nothing about it actually stuck —
-  // scroll-collapse was already gone — but a titled bar with a rule under it reads
-  // as a frozen header, which is what the owner kept filing against it (tickets
-  // tr60ibj2, xFD22e5T, T0aqnE2h). The one thing worth keeping from it is the
-  // wrapped action row for narrow columns, and `narrowActions` already does that.
+      {/* No hero/auto-prioritized block: the list starts at its first real row
+          (owner ticket T0aqnE2h). No gradient scrim either — M3 clips a scrolling
+          list cleanly at the padded container edge, and "+N more" is the way in. */}
+      {showBody && body}
 
-  // The card owns a fixed slice of the screen, so it renders exactly the whole
-  // rows that fit that slice — no clipped row, no dead gap, and no page scroll.
-  // Narrow columns fold the card's actions behind one overflow button (see header).
-  const [overflowOpen, setOverflowOpen] = useState(false);
-
-  return (
-    // GM3 filled card: borderless plain surface on the deeper tonal page — depth
-    // from tone, no outline, matching the full-panel view's card language.
-    // Calm-rows v2: each card gets a whisper of its category color mixed into the
-    // surface (M3 tonal container differentiation) so the five cards read as five
-    // distinct surfaces without any harsh color.
-    <div data-nc-feed="true"
-      style={{ position: "relative", background: `color-mix(in srgb, ${C.bg} 94%, ${accentColor || C.accent} 6%)`, borderRadius: RADIUS.lg, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden",
-        // Feed card: height comes from content. No fixed fifth, so no clipped row
-        // and no dead gap under a short card.
-        minHeight: 0,
-        // When the header travels with the list, the CARD is the scroller and the
-        // body below is just content — otherwise the header sits outside the
-        // scrolling box by construction, whatever it is styled as.
-        ...(headerScrolls ? { overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } : {}),
-        ...style }}>
-      {(
-        // Collapsing header: hides when the card content scrolls (mobile default).
-        // dense = aggressively compact: a thin single-line header that reclaims vertical space.
-        // Calm-rows: the header now always uses the thin metrics. Since the resting
-        // list no longer overflows, the collapse-on-scroll never fires, so a 56px
-        // comfortable header would permanently eat a third of a short card and leave
-        // a one-row slat (owner, iPad). Thin + always visible beats fat + frozen.
-        // Feed mode: a real M3 card header — 48dp tall, titled, tappable. The old
-        // 22px sliver was both unreadable and an illegal touch target.
-        //
-        // ONE row, always, at ONE height. narrowActions used to switch this to a
-        // column so the action buttons wrapped underneath the title — but only the
-        // two cards that HAVE actions (Mail and Calendar) wrapped, so in the
-        // five-column widescreen view two columns started their list a row lower
-        // than the other three (owner: "Columns on widescreens didn't have
-        // consistent tops, because icons are on sexond line, which also takes up
-        // space"). The height is pinned rather than left to the list item, because
-        // a card whose AI summary is empty renders a one-line item and would sit at
-        // 48px while its neighbours sit at 56px — the same ragged top by another
-        // route. Actions now fold into one uniform overflow button (below), which
-        // is also the "uniform iconography not over customized per card" half of
-        // the ticket: every card header is puck, title, one optional overflow, open,
-        // expand — in that order, whatever the card is.
-        <div style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%", flexShrink: 0, minWidth: 0, minHeight: 56, maxHeight: "none", overflow: "visible", transition: "max-height 0.2s ease, opacity 0.15s ease" }}>
-          <ListItem type="button" onClick={onToggleExpand || onOpen} title={title} aria-label={title} aria-expanded={onToggleExpand ? expanded : undefined}
-            style={{
-              flex: 1, minWidth: 0, cursor: (onToggleExpand || onOpen) ? "pointer" : "default",
-              '--md-list-item-one-line-container-height': '48px',
-              '--md-list-item-two-line-container-height': '56px',
-              '--md-list-item-top-space': '6px', '--md-list-item-bottom-space': '6px',
-              '--md-list-item-leading-space': '16px', '--md-list-item-trailing-space': '8px',
-            }}>
-            <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, color: accentColor || C.accent, flexShrink: 0 }}>{suiteIcon(icon, 22)}</span>
-            {<>
-                  <div slot="headline" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    <span style={{ fontSize: NC_TYPE.title, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
-                    {/* Live total — the guarantee that nothing is hidden or forgotten
-                        even when only the first few rows fit on screen. */}
-                    {count > 0 && (
-                      <span style={{ flexShrink: 0, minWidth: 22, height: 20, padding: "0 7px", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: RADIUS.pill, background: softBg(accentColor || C.accent, 0.18), color: accentColor || C.accent, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.meta, fontWeight: 700, lineHeight: 1 }}>{count}</span>
-                    )}
-                  </div>
-                  {summary && <div slot="supporting-text" style={{ fontSize: NC_TYPE.body, color: C.muted, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>}
-                </>}
-            {onToggleExpand && <span slot="end" style={{ display: "flex", color: C.faint, flexShrink: 0 }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
-          </ListItem>
-          {/* Narrow column: the card's own actions collapse behind ONE overflow
-              button, so every header costs the same single row no matter how many
-              actions the card happens to carry. The actions themselves are
-              unchanged — they are the same elements, just parked one tap away
-              instead of on a second line that only some cards had. */}
-          {narrowActions && headerActions ? (
-            <span style={{ position: "relative", display: "flex", alignItems: "center", flexShrink: 0, marginRight: 2 }}>
-              <IconBtn icon="more_vert" iconSize={16} color={overflowOpen ? C.accent : C.faint}
-                onClick={() => setOverflowOpen(o => !o)}
-                title={`${title} actions`} aria-label={`${title} actions`} aria-expanded={overflowOpen} />
-              {overflowOpen && (
-                <>
-                  {/* Same dismiss pattern as the account picker directly below. */}
-                  <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setOverflowOpen(false)} />
-                  <span style={{
-                    position: "absolute", top: "100%", right: 0, zIndex: 9101, display: "flex", alignItems: "center", gap: 2,
-                    padding: 4, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, boxShadow: ELEV[3],
-                  }}>{headerActions}</span>
-                </>
-              )}
-            </span>
-          ) : headerActions ? (
-            <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, marginRight: 2 }}>{headerActions}</span>
-          ) : null}
-          {onToggleExpand && onOpen && (
-            <IconBtn icon="open_in_new" iconSize={13} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ marginRight: 4 }} />
-          )}
-        </div>
-      )}
-      {/* No hero/auto-prioritized block: the list starts at its first real row. */}
-      {/* Normally the list clips at the fitted row count and "+N more" is the way in.
-          When the owner has asked this card to show everything but it is not the
-          expanded card, it scrolls its own rows instead — one screen is preserved
-          because only this card scrolls, never the page. */}
-      {/* The body always scrolls. It used to be `scrollable ? "auto" : "hidden"`,
-          on the theory that useFitRows renders exactly the rows that fit so there
-          is never anything to scroll to. Measured on a 1280x800 tablet that is not
-          true: the Mail card's last row ended 29px below the body and its "+N more"
-          chip a further 63px below that — the chip is appended AFTER the fitted
-          rows and was never part of the fit — so the card was clipping content with
-          no scroll AND no affordance to reach it (owner: "won't scroll in card").
-          `auto` costs nothing when the fit is exact and rescues every case where it
-          is not, which includes any card whose body brings its own layout, like
-          Phone. Clipping was never the feature; the "+N more" chip is, and it still
-          leads the way in. */}
-      <div ref={scrollRef}
-        style={{ flex: 1, minHeight: 0, overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", paddingBottom: 4, backgroundColor: "inherit",
-          // The card above is the scroller in this mode; a second scrolling box
-          // inside it would trap the gesture and leave the header frozen anyway.
-          ...(headerScrolls ? { flex: "0 0 auto", overflowY: "visible", overscrollBehavior: "auto" } : {}),
-          ...(collapsed ? { display: "none" } : {}) }}>
-        {typeof children === "function" ? children() : children}
-      </div>
-      {/* No gradient scrim: M3 clips scrolling lists cleanly at the padded
-          container edge, and the "+N more" row is the more-content affordance.
-          The old fade overlay only ever rendered on the pre-GM3 path and went
-          with it. */}
       {statusDot && <span style={{ position: "absolute", top: 7, right: onToggleExpand ? 36 : 7, width: 8, height: 8, borderRadius: RADIUS.pill, background: statusDot, boxShadow: `0 0 0 2px ${C.bg}`, pointerEvents: "none" }} />}
     </div>
   );
@@ -1121,7 +1105,7 @@ function TaskRowActions({ id, C, open, onToggle, onClose, onDone, onDelete }) {
 // Module level, not inside NerveCenter, and for a load-bearing reason: the component
 // re-renders every second on the clock tick, and a component defined inside another
 // component is a NEW type on every render, so React unmounts and remounts it — which
-// killed focus mid-typing and cancelled gestures. See the note above MobileSection.
+// killed focus mid-typing and cancelled gestures. See the note above NcCard.
 
 // NcTaskComposer — the "new task" textarea + save + cancel.
 function NcTaskComposer({
@@ -1907,6 +1891,18 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const isMobileDevice = useMemo(() => isMobilePhoneDevice(), []);
   const isStacked = availableW < 760;
   const isTablet = !isStacked && availableW < 1120;
+  // ── Which layout is on screen ──────────────────────────────────────────────
+  // ONE value, instead of the same two conditions re-spelled at each render
+  // branch 500 lines apart. "grid" is the 5-box card grid a real phone/tablet
+  // gets (and the desktop opt-in); "stack" is the narrow single column; "columns"
+  // is the 5-column desktop view. Order matters and is the historical one: a
+  // phone in the grid layout stays a grid even below 760px.
+  //
+  // isMobileDevice and desktopLayout === "boxes" share a branch. Nobody had ever
+  // checked whether that was deliberate or accretion; it is deliberate — "boxes"
+  // exists precisely so a desktop can opt into the device layout — and naming it
+  // here is what makes that legible.
+  const ncLayout = (isMobileDevice || desktopLayout === "boxes") ? "grid" : isStacked ? "stack" : "columns";
   const touchLayout = isStacked || isTablet;
   // The adaptive resting cap that used to be computed here is gone: its only
   // consumer sat on the pre-GM3 branch. Cards now derive their row count by
@@ -3317,7 +3313,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // enough to skip the width-based accordion and fall through to the desktop layout,
   // which overran. This catches BOTH orientations. Boxes: Mail · Phone · Tasks ·
   // Shailos · Calendar, each scrolling internally so nothing overflows the screen.
-  if ((isMobileDevice || desktopLayout === "boxes") && !healthPage && !chiefPage) {
+  if (ncLayout === "grid" && !healthPage && !chiefPage) {
     const menuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const menuClose  = () => setMobileMenuOpen(null);
     // >= 1500 px: 5 vertical columns side by side (each card full height, 1/5 width).
@@ -3342,7 +3338,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
       // stays readable and "expanded" simply means this card shows all its items.
       collapsed: false,
       onToggleExpand: () => setExpandedBoxId(prev => prev === id ? null : id),
-      // No `scrollable` flag any more — MobileBox's body always scrolls. It used to
+      // No `scrollable` flag any more — NcCard's body always scrolls. It used to
       // be granted only to a show-all card that was NOT the expanded one, which got
       // it exactly backwards: expanding is the gesture that means "show me all of
       // this", the card then renders every row, and with overflow hidden everything
@@ -3428,7 +3424,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // Headers scroll with their list everywhere except the 5-column desktop
     // layout — that is the tablet portrait/landscape case the ticket is about,
     // and the phone rows layout has exactly the same complaint at a smaller size.
-    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, narrowActions: narrowCardActions, headerScrolls: !boxesFiveCol };
+    const boxCtx = { C, variant: "card", menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, narrowActions: narrowCardActions, headerScrolls: !boxesFiveCol };
     // Height of a sibling card while another card is expanded: exactly its header,
     // so it stays tappable (one tap switches which card is expanded) without
     // claiming any of the expanded card's space.
@@ -3592,7 +3588,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} narrowActions={colW < 480} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={feedCounts.mail} summary={cardSummary("Mail")} style={cardStyleFor("mail")} dense={dense}
+          <NcCard {...boxCtx} narrowActions={colW < 480} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={feedCounts.mail} caption={cardSummary("Mail")} style={cardStyleFor("mail")} dense={dense}
             onOpen={openGmailInbox}
             /* Account picker + refresh ride the card's own header row instead of a second
                toolbar row underneath it (owner ticket 7/14: "two rows when they need only
@@ -3646,20 +3642,20 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             })}
             </>);
             }}
-          </MobileBox>
+          </NcCard>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} {...boxProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} count={feedCounts.phone} summary={cardSummary("Phone")} style={cardStyleFor("phone")} dense={dense}
+          <NcCard {...boxCtx} {...boxProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} count={feedCounts.phone} caption={cardSummary("Phone")} style={cardStyleFor("phone")} dense={dense}
             statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding: "0 8px 6px", boxSizing:"border-box" }}>
               <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} rowActions={rowActionsFit} rowMeta={rowMetaFit} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
-          </MobileBox>
+          </NcCard>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} narrowActions={colW < 480} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} count={feedCounts.tasks} summary={cardSummary("Tasks")} style={cardStyleFor("tasks")} dense={dense}
+          <NcCard {...boxCtx} narrowActions={colW < 480} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} count={feedCounts.tasks} caption={cardSummary("Tasks")} style={cardStyleFor("tasks")} dense={dense}
             onOpen={onOpenQueue}
             /* Parity gap found by the ticket-PCkGDtd sweep: this card RENDERS the
                task composer but had no control that opens it, so on the card grid
@@ -3710,10 +3706,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             ))}
             </>);
             }}
-          </MobileBox>
+          </NcCard>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} count={feedCounts.shailos} summary={cardSummary("Shailos")} style={cardStyleFor("shailos")} dense={dense}
+          <NcCard {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} count={feedCounts.shailos} caption={cardSummary("Shailos")} style={cardStyleFor("shailos")} dense={dense}
             onOpen={onOpenShailos}
             /* Same parity gap: Add shaila existed on the stacked layout and on the
                full panel, and nowhere on the card grid. */
@@ -3734,10 +3730,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             })}
             </>);
             }}
-          </MobileBox>
+          </NcCard>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} narrowActions={calColW < 480} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} count={feedCounts.calendar} summary={cardSummary("Calendar")}
+          <NcCard {...boxCtx} narrowActions={calColW < 480} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} count={feedCounts.calendar} caption={cardSummary("Calendar")}
             style={calSpansFull ? { ...cardStyle, gridColumn: "1 / -1" } : cardStyleFor("calendar")} dense={dense}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}
             /* Account picker + refresh + Agenda/Live-time toggle ride the card's own header
@@ -3863,7 +3859,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </div>
               )}
             </div>
-          </MobileBox>
+          </NcCard>
         </div>
 
         {/* The reader itself. It is built once at the top of the component so every
@@ -3878,12 +3874,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   }
 
   // ── Mobile "nerve center" — all sections on one screen ──────────────────────
-  if (isStacked && !healthPage && !chiefPage) {
+  if (ncLayout === "stack" && !healthPage && !chiefPage) {
     const mobileMenuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const mobileMenuClose  = () => setMobileMenuOpen(null);
     const mobileExpandToggle = id => setMobileExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
-    // Shared props for the module-level <MobileSection>. The component is hoisted out
+    // Shared props for the module-level <NcCard>. The component is hoisted out
     // of this render (see top of file) so it is NOT recreated on every clock tick —
     // that per-second remount was tearing down and rebuilding each section mid-gesture,
     // which dropped taps on the ··· menu and reset focus in the task composer. With a
@@ -3895,7 +3891,16 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     const accWide = availableW >= 1500;
     // Accordion mode is retired — narrow-stacked sections are always expanded.
     const isAccordion = false;
-    const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose, expandable: isAccordion, fullHeight: !isAccordion, dense };
+    // One call per card, so the card's expand/menu state is resolved here rather
+    // than by the shell reaching into a Set it was handed. Accordion mode is
+    // retired, so every stacked section is permanently expanded and full height.
+    const sectionProps = id => ({
+      C, id, variant: "section", dense,
+      expandable: isAccordion, fullHeight: !isAccordion,
+      expanded: !isAccordion || mobileExpanded.has(id),
+      onToggleExpand: isAccordion ? () => mobileExpandToggle(id) : null,
+      menuOpen: mobileMenuOpen === id, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose,
+    });
 
     const signalNote = nerveSignalNote;
 
@@ -3979,9 +3984,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               gridTemplateRows:    accWide ? "1fr" : "repeat(5, minmax(0,1fr))" }) }}>
 
           {/* Tasks — collapsible; open the section when the composer is invoked so it shows. */}
-          <MobileSection {...sectionCtx} id="tasks" icon="rule" title="Tasks" accentColor={C.accent} count={ncQueues.tasksRaw.length} preview={tasksPreview}
+          <NcCard {...sectionProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} count={ncQueues.tasksRaw.length} caption={tasksPreview}
             primaryBtn={<IconBtn icon="add" iconSize={14} color={C.muted} onClick={() => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority); }} title="Add task" aria-label="Add task" />}
-            menuItems={[
+            actions={[
               { icon: "list_alt",    label: "Open full queue", run: onOpenQueue },
               { icon: "local_drink", label: "Zen mode",        run: onOpenZen },
               ...(onAddMrsWTask ? [{ icon: "person", label: "Add Mrs W task", run: () => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority, { mrsW: true }); } }] : []),
@@ -4015,13 +4020,13 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             ))}
             </>);
             }}
-          </MobileSection>
+          </NcCard>
 
           {/* Calendar */}
           {(googleToken || calendarEvents !== null) && (
-            <MobileSection {...sectionCtx} id="cal" icon="calendar_today" title="Calendar" accentColor={C.warning}
-              preview={signalNote("Calendar")}
-              menuItems={[
+            <NcCard {...sectionProps("cal")} icon="calendar_today" title="Calendar" accentColor={C.warning}
+              caption={signalNote("Calendar")}
+              actions={[
                 { icon: "add",         label: "Add event",            run: () => { setMobileExpanded(prev => new Set(prev).add("cal")); setShowAddEvent(true); } },
                 { icon: "refresh",     label: "Refresh",              run: onRefreshCalendar || onConnectGoogle },
                 { icon: "open_in_new", label: "Open Google Calendar", run: () => window.open("https://calendar.google.com/calendar/r","_blank") },
@@ -4068,14 +4073,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               )}
               </>);
               }}
-            </MobileSection>
+            </NcCard>
           )}
 
           {/* Gmail */}
           {(googleToken || gmailMessages !== null) && (
-            <MobileSection {...sectionCtx} id="mail" icon="mail" title="Mail" accentColor={CAT_MAIL} count={(gmailMessages||[]).length}
-              preview={signalNote("Mail")}
-              menuItems={[
+            <NcCard {...sectionProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={(gmailMessages||[]).length}
+              caption={signalNote("Mail")}
+              actions={[
                 { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
                 { icon: "open_in_new", label: "Open Gmail", run: openGmailInbox },
                 ...googleAcctMenuItems,
@@ -4118,14 +4123,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               })}
               </>);
               }}
-            </MobileSection>
+            </NcCard>
           )}
 
           {/* Shailos */}
-          <MobileSection {...sectionCtx} id="shailos" icon="question_mark" title="Shailos" accentColor={GOLD} count={ncQueues.shailosRaw.length}
-            preview={signalNote("Shailos")}
+          <NcCard {...sectionProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} count={ncQueues.shailosRaw.length}
+            caption={signalNote("Shailos")}
             primaryBtn={<IconBtn icon="add" iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}
-            menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
+            actions={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
           >
             {() => {
             const secShailaRest = ncLists.shailos.slice(0, 40);
@@ -4145,19 +4150,19 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             })}
             </>);
             }}
-          </MobileSection>
+          </NcCard>
 
           {/* Phone — keepMounted so the DeskPhone poller keeps running while collapsed */}
-          <MobileSection {...sectionCtx} id="phone" icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} keepMounted
-            preview={signalNote("Phone")}
-            menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
+          <NcCard {...sectionProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} keepMounted
+            caption={signalNote("Phone")}
+            actions={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
           >
             {/* Real height so the phone surface's flex:1 activity feed (texts + calls) gets
                 space — a plain block wrapper collapsed it to zero, so calls never showed. */}
             <div style={{ padding: dense?"2px 12px 8px":"4px 12px 10px", borderTop: `1px solid ${C.divider}`, height: 380, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
               <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
-          </MobileSection>
+          </NcCard>
 
           {/* Connect Google prompt (no token yet) */}
           {googleClientId && !googleToken && !googleLoading && calendarEvents === null && gmailMessages === null && (
