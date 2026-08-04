@@ -45,6 +45,16 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     continue
   fi
 
+  # Nothing shippable in the push — docs, ops notes, tooling — needs no bump. The
+  # stamp says what is DEPLOYED, and none of these change that; bumping for them
+  # would restamp the rail over a build that did not move. Without this exemption
+  # every docs push is a --no-verify push, which is how a guard stops being one.
+  # Anything under apps/ (or the workflows that deploy it) still requires the bump.
+  if ! git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null \
+      | grep -qE '^(apps/|\.github/workflows/)'; then
+    continue
+  fi
+
   old_ver=$(extract_version "$remote_sha")
   if [ -n "$old_ver" ] && [ "$new_ver" = "$old_ver" ]; then
     echo "" >&2
