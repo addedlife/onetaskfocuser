@@ -56,21 +56,21 @@ function BulkAdd({pris, T, onAddAll, onClose}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:8500,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s",overflowY:"auto",padding:20}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:RADIUS.md,padding:"24px 20px",maxWidth:520,width:"100%",maxHeight:"85vh",overflowY:"auto",boxShadow:ELEV[4]}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0}}>Bulk Add Tasks</h3><button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft}}>✕</button></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0}}>Bulk Add Tasks</h3><button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft}}>✕</button></div>
         {pm ? (
           <div style={{marginBottom:16}}>
             <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 8px"}}>Paste a list — newlines, numbered, bullets, or comma-separated. Optional: "Priority: task"</p>
             <textarea value={pt} onChange={e=>setPt(e.target.value)} rows={8} placeholder={"Now: Review contract\nShaila: Bishul akum\nToday: Call plumber"} style={{width:"100%",padding:SP.md,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,background:T.bgW,color:T.text,resize:"vertical"}}/>
             <div style={{display:"flex",gap:SP.sm,marginTop:10}}>
-              <button onClick={()=>setPm(false)} style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.card,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Cancel</button>
-              <button onClick={handlePaste} style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK}}>Parse</button>
+              <button onClick={()=>setPm(false)} style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.card,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Cancel</button>
+              <button onClick={handlePaste} style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK}}>Parse</button>
             </div>
           </div>
         ) : (
-          <button onClick={()=>setPm(true)} style={{width:"100%",padding:10,borderRadius:RADIUS.sm,border:`1px dashed ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.tSoft,marginBottom:12}}>Paste a list</button>
+          <button onClick={()=>setPm(true)} style={{width:"100%",padding:10,borderRadius:RADIUS.sm,border:`1px dashed ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,color:T.tSoft,marginBottom:12}}>Paste a list</button>
         )}
         <div style={{display:"grid",gridTemplateColumns:"auto 1fr 32px",gap:"6px 8px",alignItems:"center",marginBottom:16}}>
-          <span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:700}}>Pri</span><span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:700}}>Task</span><span/>
+          <span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`}}>Pri</span><span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`}}>Task</span><span/>
           {rows.map(row => (
             <React.Fragment key={row.id}>
               <select value={row.pri} onChange={e=>setRows(r=>r.map(x=>x.id===row.id?{...x,pri:e.target.value}:x))} style={{padding:"7px 4px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,outline:"none"}}>
@@ -82,7 +82,7 @@ function BulkAdd({pris, T, onAddAll, onClose}) {
           ))}
         </div>
         <button onClick={addRow} style={{width:"100%",padding:SP.sm,borderRadius:RADIUS.sm,border:`1px dashed ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:NC_FONT_STACK,marginBottom:16}}>+ Add row</button>
-        <button onClick={sub} style={{width:"100%",padding:SP.md,borderRadius:RADIUS.md,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:600,fontFamily:NC_FONT_STACK}}>Add {rows.filter(r=>r.text.trim()).length} Tasks</button>
+        <button onClick={sub} style={{width:"100%",padding:SP.md,borderRadius:RADIUS.md,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK}}>Add {rows.filter(r=>r.text.trim()).length} Tasks</button>
       </div>
     </div>
   );
@@ -179,16 +179,16 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:8500,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s",overflowY:"auto",padding:20}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:RADIUS.md,padding:"24px 20px",maxWidth:520,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:ELEV[4]}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0,display:"flex",alignItems:"center",gap:SP.sm}}><IC.Split s={18} c={T.text}/> Shatter Task</h3><button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft}}>✕</button></div>
-        <div style={{marginBottom:16}}><label style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:700}}>Big task:</label><div style={{display:"flex",gap:6,alignItems:"center",marginTop:6}}><input value={inp} onChange={e=>setInp(e.target.value)} placeholder="e.g. Prepare shiur" style={{flex:1,padding:"10px 14px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,background:T.bgW,color:T.text}} onKeyDown={e=>{if(e.key==="Enter")bd();}}/><button onClick={micRec?stopBdMic:startBdMic} title={micRec?"Stop recording":"Speak your task"} style={{width:38,height:38,borderRadius:RADIUS.sm,border:`1px solid ${micRec?"#B87A5A":T.brd}`,background:micRec?"#B87A5A20":T.bgW,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>{micRec?<div style={{width:10,height:10,borderRadius:2,background:"#B87A5A"}}/>:<IC.Mic s={16} c={T.tSoft}/>}</button></div></div>
-        <button onClick={bd} disabled={ld||!inp.trim()} style={{width:"100%",padding:SP.md,borderRadius:RADIUS.md,border:"none",background:ld?"#aaa":pris[0]?.color,color:ld?"#fff":textOnColor(pris[0]?.color||"#5A9E7C"),cursor:ld?"wait":"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:SP.sm}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0,display:"flex",alignItems:"center",gap:SP.sm}}><IC.Split s={18} c={T.text}/> Shatter Task</h3><button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft}}>✕</button></div>
+        <div style={{marginBottom:16}}><label style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`}}>Big task:</label><div style={{display:"flex",gap:6,alignItems:"center",marginTop:6}}><input value={inp} onChange={e=>setInp(e.target.value)} placeholder="e.g. Prepare shiur" style={{flex:1,padding:"10px 14px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,background:T.bgW,color:T.text}} onKeyDown={e=>{if(e.key==="Enter")bd();}}/><button onClick={micRec?stopBdMic:startBdMic} title={micRec?"Stop recording":"Speak your task"} style={{width:38,height:38,borderRadius:RADIUS.sm,border:`1px solid ${micRec?"#B87A5A":T.brd}`,background:micRec?"#B87A5A20":T.bgW,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>{micRec?<div style={{width:10,height:10,borderRadius:2,background:"#B87A5A"}}/>:<IC.Mic s={16} c={T.tSoft}/>}</button></div></div>
+        <button onClick={bd} disabled={ld||!inp.trim()} style={{width:"100%",padding:SP.md,borderRadius:RADIUS.md,border:"none",background:ld?"#aaa":pris[0]?.color,color:ld?"#fff":textOnColor(pris[0]?.color||"#5A9E7C"),cursor:ld?"wait":"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:SP.sm}}>
           {ld&&<span style={{display:"inline-block",width:14,height:14,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"ot-spin 0.8s linear infinite"}}/>}
           {ld?"Thinking...":"Shatter with AI ✦"}
         </button>
         {err&&<p style={{color:T.danger,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,margin:"0 0 12px"}}>{err}</p>}
         {subs.length>0&&(
           <div style={{marginBottom:16}}>
-            <h4 style={{fontSize:NC_TYPE.meta,fontWeight:700,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 10px",textTransform:"uppercase",letterSpacing:1}}>Crystals</h4>
+            <h4 style={{fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-strong, 700)`,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 10px",textTransform:"uppercase",letterSpacing:1}}>Crystals</h4>
             {subs.map((st, i) => (
               <div key={st.id} style={{display:"flex",alignItems:"center",gap:SP.sm,padding:"8px 0",borderBottom:`1px solid ${T.brdS}`}}>
                 <button onClick={()=>setSubs(s=>s.map(x=>x.id===st.id?{...x,on:!x.on}:x))} style={{width:20,height:20,borderRadius:RADIUS.xs,border:`1.5px solid ${st.on?pris[0]?.color:T.brd}`,background:st.on?pris[0]?.color:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{st.on&&<IC.Check s={12} c="#fff"/>}</button>
@@ -211,12 +211,12 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
             )}
             <div style={{display:"flex",gap:6}}>
               <input value={cm} onChange={e=>setCm(e.target.value)} placeholder="Adjust..." style={{flex:1,padding:"8px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,background:T.bgW,color:T.text}} onKeyDown={e=>{if(e.key==="Enter")chat();}}/>
-              <button onClick={chat} disabled={ld} style={{padding:"8px 14px",borderRadius:RADIUS.sm,border:"none",background:pris[0]?.color,color:textOnColor(pris[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK}}>Send</button>
+              <button onClick={chat} disabled={ld} style={{padding:"8px 14px",borderRadius:RADIUS.sm,border:"none",background:pris[0]?.color,color:textOnColor(pris[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK}}>Send</button>
             </div>
           </div>
         )}
         {subs.length>0&&subs.some(s=>s.on)&&(
-          <button onClick={confirmSteps} style={{width:"100%",padding:SP.md,borderRadius:RADIUS.md,border:"none",background:"#4CAF50",color:"#fff",cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:600,fontFamily:NC_FONT_STACK}}>Plant {subs.filter(s=>s.on).length} Crystals</button>
+          <button onClick={confirmSteps} style={{width:"100%",padding:SP.md,borderRadius:RADIUS.md,border:"none",background:"#4CAF50",color:"#fff",cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK}}>Plant {subs.filter(s=>s.on).length} Crystals</button>
         )}
       </div>
     </div>
@@ -249,7 +249,7 @@ function BlockedModal({task, T, pris, onBlock, onClose}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:RADIUS.md,padding:"24px 20px",maxWidth:400,width:"90%",boxShadow:ELEV[4]}}>
-        <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:"0 0 6px",display:"flex",alignItems:"center",gap:SP.sm}}><IC.Pause s={16} c={T.text}/>Mark as Blocked</h3>
+        <h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:"0 0 6px",display:"flex",alignItems:"center",gap:SP.sm}}><IC.Pause s={16} c={T.text}/>Mark as Blocked</h3>
         <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 14px"}}>Task moves to the bottom. You'll get a nudge after the selected time asking if it's still blocked.</p>
         <div style={{background:pBg(p.color),borderRadius:RADIUS.sm,padding:"10px 12px",marginBottom:14,border:`1px solid ${p.color}40`}}>
           <p style={{fontSize:NC_TYPE.meta,margin:0,color:T.text}}>{task.text}</p>
@@ -261,14 +261,14 @@ function BlockedModal({task, T, pris, onBlock, onClose}) {
           rows={2}
           style={{width:"100%",padding:"9px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,background:T.bgW,color:T.text,marginBottom:12,resize:"none",boxSizing:"border-box"}}
         />
-        <p style={{fontSize:NC_TYPE.small,fontWeight:600,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 6px",textTransform:"uppercase",letterSpacing:.5}}>Remind me in</p>
+        <p style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-semibold, 600)`,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 6px",textTransform:"uppercase",letterSpacing:.5}}>Remind me in</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:isCustom?10:14}}>
           {BLOCKED_DURATIONS.map((d, i) => (
             <button key={i} onClick={()=>setDurIdx(i)} style={{
               padding:"5px 11px",borderRadius:RADIUS.pill,border:`1.5px solid ${i===durIdx?"#C49040":T.brd}`,
               background:i===durIdx?"rgba(196,144,64,0.12)":"none",
               color:i===durIdx?"#C49040":T.tSoft,
-              fontSize:NC_TYPE.small,fontWeight:600,cursor:"pointer",fontFamily:NC_FONT_STACK
+              fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-semibold, 600)`,cursor:"pointer",fontFamily:NC_FONT_STACK
             }}>{d.label}</button>
           ))}
         </div>
@@ -298,7 +298,7 @@ function BlockedModal({task, T, pris, onBlock, onClose}) {
           <button
             onClick={()=>{ if (resolvedMs) onBlock(task.id, note.trim(), resolvedMs); }}
             disabled={!resolvedMs}
-            style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:"none",background:resolvedMs?"#C49040":"#aaa",color:"#fff",cursor:resolvedMs?"pointer":"default",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK}}
+            style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:"none",background:resolvedMs?"#C49040":"#aaa",color:"#fff",cursor:resolvedMs?"pointer":"default",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK}}
           >Mark Blocked</button>
         </div>
       </div>
@@ -315,13 +315,13 @@ function ContextTagPicker({current, T, onSelect, onClose}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:RADIUS.md,padding:"20px 18px",maxWidth:320,width:"90%",boxShadow:"0 6px 24px rgba(0,0,0,0.15)"}}>
-        <h4 style={{fontSize:NC_TYPE.meta,fontWeight:600,margin:"0 0 12px",fontFamily:NC_FONT_STACK}}>Context Tags</h4>
+        <h4 style={{fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,margin:"0 0 12px",fontFamily:NC_FONT_STACK}}>Context Tags</h4>
         <div style={{display:"flex",flexWrap:"wrap",gap:SP.sm,marginBottom:16}}>
           {ALL_CTX_TAGS.map(tag => {
             const on = sel.includes(tag);
             const c = CTX_TAG_COLORS[tag];
             return (
-              <button key={tag} onClick={()=>toggle(tag)} style={{padding:"6px 12px",borderRadius:RADIUS.sm,border:`1.5px solid ${c}`,background:on?c+"30":"transparent",color:c,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>
+              <button key={tag} onClick={()=>toggle(tag)} style={{padding:"6px 12px",borderRadius:RADIUS.sm,border:`1.5px solid ${c}`,background:on?c+"30":"transparent",color:c,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,cursor:"pointer"}}>
                 {tag}
               </button>
             );
@@ -329,7 +329,7 @@ function ContextTagPicker({current, T, onSelect, onClose}) {
         </div>
         <div style={{display:"flex",gap:SP.sm}}>
           <button onClick={onClose} style={{flex:1,padding:SP.sm,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.card,cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Cancel</button>
-          <button onClick={()=>{onSelect(sel);onClose();}} style={{flex:1,padding:SP.sm,borderRadius:RADIUS.sm,border:"none",background:T.text,color:T.bg||"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK}}>Apply</button>
+          <button onClick={()=>{onSelect(sel);onClose();}} style={{flex:1,padding:SP.sm,borderRadius:RADIUS.sm,border:"none",background:T.text,color:T.bg||"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK}}>Apply</button>
         </div>
       </div>
     </div>
@@ -349,25 +349,25 @@ function ListManager({AS, setAS, T, onClose}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:8500,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:20}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:RADIUS.md,padding:"24px 20px",maxWidth:480,width:"100%",maxHeight:"85vh",overflowY:"auto",boxShadow:`0 6px 24px rgba(0,0,0,0.15)`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0}}>Manage Lists</h3><button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft}}>✕</button></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0}}>Manage Lists</h3><button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft}}>✕</button></div>
         {lists.map(l => {
           const act = l.tasks.filter(t=>!t.completed).length;
           const comp = l.tasks.filter(t=>t.completed).length;
           return (
             <div key={l.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",borderBottom:`1px solid ${T.brdS}`}}>
               <IC.Folder s={16} c={l.id===AS.activeListId?T.text:T.tSoft}/>
-              <div style={{flex:1}}><span style={{fontSize:NC_TYPE.body,fontWeight:l.id===AS.activeListId?600:400,fontFamily:NC_FONT_STACK}}>{l.name}</span><span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,marginLeft:8}}>{act} pending · {comp} done</span></div>
+              <div style={{flex:1}}><span style={{fontSize:NC_TYPE.body,fontWeight:l.id===AS.activeListId?`var(--nc-fw-semibold, 600)`:`var(--nc-fw-normal, 400)`,fontFamily:NC_FONT_STACK}}>{l.name}</span><span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,marginLeft:8}}>{act} pending · {comp} done</span></div>
               <button onClick={()=>renList(l.id)} title="Rename" style={{background:"none",border:"none",cursor:"pointer",padding:SP.xs,opacity:.5}}><span style={{fontSize:NC_TYPE.meta}}>✏️</span></button>
               {mergeFrom===l.id?(<span style={{fontSize:NC_TYPE.small,color:T.tSoft,fontFamily:NC_FONT_STACK}}>Select target ↓</span>):(<button onClick={()=>setMergeFrom(l.id)} title="Merge into..." style={{background:"none",border:"none",cursor:"pointer",padding:SP.xs,opacity:.5}}><IC.Merge s={13} c={T.tSoft}/></button>)}
-              {mergeFrom&&mergeFrom!==l.id&&(<button onClick={()=>{mergeList(mergeFrom,l.id);setMergeFrom(null);}} style={{padding:"4px 8px",borderRadius:RADIUS.sm,border:"none",background:"#4CAF50",color:"#fff",cursor:"pointer",fontSize:NC_TYPE.small,fontWeight:600,fontFamily:NC_FONT_STACK}}>Merge here</button>)}
+              {mergeFrom&&mergeFrom!==l.id&&(<button onClick={()=>{mergeList(mergeFrom,l.id);setMergeFrom(null);}} style={{padding:"4px 8px",borderRadius:RADIUS.sm,border:"none",background:"#4CAF50",color:"#fff",cursor:"pointer",fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK}}>Merge here</button>)}
               <button onClick={()=>downloadList([l.id])} title="Download" style={{background:"none",border:"none",cursor:"pointer",padding:SP.xs,opacity:.5}}><IC.Download s={13} c={T.tSoft}/></button>
               {lists.length>1&&<button onClick={()=>delList(l.id)} title="Delete" style={{background:"none",border:"none",cursor:"pointer",padding:SP.xs,opacity:.4}}><IC.Trash s={13} c={T.tFaint}/></button>}
             </div>
           );
         })}
         <div style={{display:"flex",gap:SP.sm,marginTop:16}}>
-          <button onClick={addList} style={{flex:1,padding:SP.md,borderRadius:RADIUS.md,border:`1px dashed ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><IC.Plus s={12} c={T.tSoft}/> New List</button>
-          <button onClick={()=>downloadList(lists.map(l=>l.id))} style={{flex:1,padding:SP.md,borderRadius:RADIUS.md,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><IC.Download s={12} c={T.tSoft}/> Export All</button>
+          <button onClick={addList} style={{flex:1,padding:SP.md,borderRadius:RADIUS.md,border:`1px dashed ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><IC.Plus s={12} c={T.tSoft}/> New List</button>
+          <button onClick={()=>downloadList(lists.map(l=>l.id))} style={{flex:1,padding:SP.md,borderRadius:RADIUS.md,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><IC.Download s={12} c={T.tSoft}/> Export All</button>
         </div>
       </div>
     </div>

@@ -306,11 +306,11 @@ export function TaskRiverPanel({
       {/* Content column is capped at a readable width and centered — on wide monitors the
           full-bleed layout pushed the trailing meta miles from the leading text. */}
       <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', alignItems: 'baseline', gap: SP.sm, flexWrap: 'wrap', maxWidth: 880, width: '100%', marginInline: 'auto', boxSizing: 'border-box' }}>
-        <span style={{ fontSize: 23, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
+        <span style={{ fontSize: 23, fontWeight: `var(--nc-fw-light, 300)`, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
         <span style={{ fontSize: NC_TYPE.meta, color: aiState === 'error' ? (C.warning || '#C8A84C') : C.muted, fontFamily: NC_FONT_STACK }}>{view.length} items · {statusText}</span>
         <button onClick={reprioritize}
           title={manual ? 'Reset manual order and re-rank with AI' : 'Force a fresh AI ranking'}
-          style={{ marginLeft: 'auto', fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 500,
+          style={{ marginLeft: 'auto', fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-medium, 500)`,
             color: (manual || aiState === 'error') ? '#fff' : C.faint,
             background: (manual || aiState === 'error') ? rgba(COL_SHAILA, 0.9) : 'transparent',
             border: `1px solid ${(manual || aiState === 'error') ? rgba(COL_SHAILA, 0.9) : C.divider}`,
@@ -334,7 +334,7 @@ export function TaskRiverPanel({
                     padding: '3px 6px 3px 10px', minHeight: 26, cursor: 'pointer', borderRadius: RADIUS.sm,
                     background: isDrag ? rgba(it.color, 0.12) : 'transparent', transition: 'background .12s' }}>
                   <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: SP.xs, overflow: 'hidden' }}>
-                    {it.meta && <span style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: 'nowrap' }}>{it.meta}</span>}
+                    {it.meta && <span style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.muted, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: 'nowrap' }}>{it.meta}</span>}
                     <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', minWidth: 0 }}>
                       {it.pinned && <span style={{ color: it.color, marginRight: 4 }}>★</span>}{it.line}
                     </span>

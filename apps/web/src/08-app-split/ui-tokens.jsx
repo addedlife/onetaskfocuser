@@ -81,10 +81,14 @@ export const NC_TYPE = {
 // what the GM3 sweep is removing.
 // Line height and size both come from the CSS vars, so a role only needs its
 // token name plus the weight and tracking the M3 spec assigns it.
+// The weight comes from the role's own typescale var, not a literal, so these
+// style objects move with the Readability slider exactly like the @material/web
+// components that read the same var (ticket qRYPTmgc). `weight` stays as the
+// documented fallback for surfaces outside the app root.
 const role = (token, weight, tracking = '0') => ({
   fontSize: `var(--md-sys-typescale-${token}-size)`,
   lineHeight: `var(--md-sys-typescale-${token}-line-height)`,
-  fontWeight: weight,
+  fontWeight: `var(--md-sys-typescale-${token}-weight, ${weight})`,
   letterSpacing: tracking,
   fontFamily: NC_FONT_STACK,
 });
@@ -466,6 +470,22 @@ export const NC_GLOBAL_CSS = `
   --md-sys-color-scrim:                    #000000;
   --md-sys-color-surface-tint:             var(--shp-color-accent, #00796B);
 
+  /* ── Font weight scale ─────────────────────────────────────────────────────
+     FIVE weights, and nothing in the app is allowed a sixth. The Readability
+     slider in Settings moves the whole scale together (App.jsx redeclares all
+     five on .nc-suite-root, offset from the slider value), which is the only way
+     "make the text lighter" can mean anything: a hard-coded 700 heading next to a
+     variable 340 body is not a lighter app, it is a more contrasty one.
+
+     These :root values are the defaults, used by surfaces outside the app shell
+     (DeskPhone Web) and as the fallback in every var() reference. They are the
+     weights the app shipped with, so nothing moves until the slider does. */
+  --nc-fw-light:     300;
+  --nc-fw-normal:    400;
+  --nc-fw-medium:    500;
+  --nc-fw-semibold:  600;
+  --nc-fw-strong:    700;
+
   /* ── M3 type scale ─────────────────────────────────────────────────────────
      The fifteen Material 3 typescale roles. @material/web components read these
      from --md-sys-typescale-*; until now only the TYPEFACE was bridged, so every
@@ -572,6 +592,31 @@ export const NC_GLOBAL_CSS = `
   --md-sys-shape-corner-extra-large: var(--shp-radius-xl, 28px);
   --md-sys-shape-corner-full:        var(--shp-radius-pill, 999px);
 }
+/* Every @material/web component reads its label weight from the typescale roles,
+   so the shadow DOM has to be re-pointed at the scale or the slider stops at the
+   edge of every M3 button, chip and list item (owner ticket qRYPTmgc, 8/4:
+   "some text and components are very bolded, not affected by textweight slider").
+   This block sits on the app root ELEMENT — the same element App.jsx declares the
+   five --nc-fw-* on — so var() resolves against the slider's values rather than
+   freezing to the :root defaults above. The role→step mapping is M3's own: display
+   and headline are regular, title and label are medium. */
+.nc-suite-root {
+  --md-sys-typescale-display-large-weight:   var(--nc-fw-normal, 400);
+  --md-sys-typescale-display-medium-weight:  var(--nc-fw-normal, 400);
+  --md-sys-typescale-display-small-weight:   var(--nc-fw-normal, 400);
+  --md-sys-typescale-headline-large-weight:  var(--nc-fw-normal, 400);
+  --md-sys-typescale-headline-medium-weight: var(--nc-fw-normal, 400);
+  --md-sys-typescale-headline-small-weight:  var(--nc-fw-normal, 400);
+  --md-sys-typescale-title-large-weight:     var(--nc-fw-normal, 400);
+  --md-sys-typescale-title-medium-weight:    var(--nc-fw-medium, 500);
+  --md-sys-typescale-title-small-weight:     var(--nc-fw-medium, 500);
+  --md-sys-typescale-body-large-weight:      var(--nc-fw-normal, 400);
+  --md-sys-typescale-body-medium-weight:     var(--nc-fw-normal, 400);
+  --md-sys-typescale-body-small-weight:      var(--nc-fw-normal, 400);
+  --md-sys-typescale-label-large-weight:     var(--nc-fw-medium, 500);
+  --md-sys-typescale-label-medium-weight:    var(--nc-fw-medium, 500);
+  --md-sys-typescale-label-small-weight:     var(--nc-fw-medium, 500);
+}
 .nc-suite-root,
 .nc-suite-root :where(button, input, textarea, select, p, span, div, a, label, h1, h2, h3, h4, h5, h6, li, summary) {
   font-family: ${NC_FONT_STACK} !important;
@@ -588,11 +633,24 @@ export const NC_GLOBAL_CSS = `
 .nc-suite-root :where(button, input, textarea, select) {
   line-height: 1.25;
 }
-.nc-suite-root :where(button, input, textarea, select, p, div, a, label, li, summary) {
-  font-weight: var(--nc-font-weight-normal, 400) !important;
+/* The app's resting weight, for everything that does not ask for another one.
+   Two things changed here after ticket qRYPTmgc:
+     - span joined the list. It was the one text-bearing element left out, and it
+       is the element this codebase reaches for most, so the single largest block
+       of app text was pinned at the browser default while the slider moved
+       everything around it.
+     - !important is gone. An important author declaration beats a normal INLINE
+       one, so while it was there the rule fought every inline weight in the app
+       and lost only where the element was not in the selector list — which is
+       precisely the inconsistency the ticket describes. Inline weights are now
+       written as var(--nc-fw-*) references (they scale with the slider too), so
+       the rule can go back to being what it always should have been: a default
+       that anything may override. :where() keeps its specificity at zero. */
+.nc-suite-root :where(button, input, textarea, select, p, span, div, a, label, li, summary) {
+  font-weight: var(--nc-fw-normal, 400);
 }
 .nc-suite-root :where(h1, h2, h3, h4, h5, h6, strong, b) {
-  font-weight: var(--nc-font-weight-strong, 500) !important;
+  font-weight: var(--nc-fw-strong, 700);
 }
 /* M3 buttons carry their label padding on :host([has-icon]) etc. The global
    *{padding:0} reset (index.html) clobbers that host padding, so the icon hugs

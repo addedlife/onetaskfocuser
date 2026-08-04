@@ -139,7 +139,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     control: 14,
     line: 1.55,
   };
-  const sh = {fontSize:settingsType.section,fontWeight:500,color:T.tFaint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:0};
+  const sh = {fontSize:settingsType.section,fontWeight:`var(--nc-fw-medium, 500)`,color:T.tFaint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:0};
   // Shared md-switch color vars — matches the old tog()'s on-color (first priority's
   // accent) so every toggle in Settings keeps the same "on" tint it always had.
   const switchVars = {
@@ -177,7 +177,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             "header bar is not long enough / streamline the panel"). */}
         <div style={{position:"sticky",top:0,zIndex:2,background:sTab==="appearance"?T.card+"f7":T.card,padding:"20px 26px 12px",borderBottom:`1px solid ${T.brdS || T.brd}`,transition:"background 0.3s"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <h3 style={{fontSize:22,fontWeight:500,margin:0,fontFamily:NC_FONT_STACK}}>Settings</h3>
+            <h3 style={{fontSize:22,fontWeight:`var(--nc-fw-medium, 500)`,margin:0,fontFamily:NC_FONT_STACK}}>Settings</h3>
             <IconBtn icon="close" iconSize={20} color={T.tSoft} onClick={onClose} title="Close" aria-label="Close settings" />
           </div>
           {/* Tabs scroll horizontally instead of squeezing — labels never truncate. */}
@@ -265,7 +265,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <h4 style={sh}>Readability</h4>
             <div style={{display:"grid",gap:SP.sm,marginBottom:16}}>
               <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:SP.md}}>
-                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:500}}>Font weight</span>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:`var(--nc-fw-medium, 500)`}}>Font weight</span>
                 <span style={{fontSize:settingsType.help,fontFamily:NC_FONT_STACK,color:T.tFaint}}>{AS.fontWeightScale || 400}</span>
               </div>
               <Slider min={340} max={520} step={20} value={AS.fontWeightScale || 400}
@@ -282,7 +282,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <h4 style={sh}>DeskPhone Link</h4>
             <div style={{...rowSB,alignItems:"flex-start",marginBottom:10}}>
               <div style={{paddingRight:12}}>
-                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:500}}>Link DeskPhone to this app's theme</span>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:`var(--nc-fw-medium, 500)`}}>Link DeskPhone to this app's theme</span>
                 <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"4px 0 0",lineHeight:settingsType.line}}>When on, Shamash Pro 4 pushes its active color scheme to DeskPhone. DeskPhone must also allow this in its Appearance settings.</p>
               </div>
               <Switch selected={deskPhoneThemeSync} onChange={onToggleDeskPhoneThemeSync} title={deskPhoneThemeSync ? "DeskPhone theme sync is on" : "DeskPhone theme sync is off"} style={switchVars} />
@@ -410,7 +410,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
           <div>
             <h4 style={sh}>AI Model</h4>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,fontWeight:500,display:"block",marginBottom:6}}>Model</label>
+              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`,display:"block",marginBottom:6}}>Model</label>
               <select
                 value={selectedModelKey}
                 onChange={e=>{
@@ -437,7 +437,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             </div>
             {selectedProvider === "gemini" && (
               <div style={{marginBottom:16}}>
-                <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,fontWeight:500,display:"block",marginBottom:6}}>Gemini key lane</label>
+                <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`,display:"block",marginBottom:6}}>Gemini key lane</label>
                 <select
                   value={selectedGeminiCredential}
                   onChange={e=>setAS(p=>({...p,aiGeminiCredential:e.target.value}))}
@@ -518,17 +518,17 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               Shows today's calendar events and important unread emails on your launchpad. Requires a Google OAuth Client ID — takes ~5 minutes to set up.
             </p>
             <div style={{background:T.bgW,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,padding:"14px 16px",marginBottom:16}}>
-              <p style={{fontSize:settingsType.help,fontWeight:500,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 10px"}}>One-time setup:</p>
+              <p style={{fontSize:settingsType.help,fontWeight:`var(--nc-fw-medium, 500)`,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 10px"}}>One-time setup:</p>
               <ol style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,paddingLeft:18,lineHeight:1.8}}>
-                <li>Go to <span style={{fontWeight:700}}>console.cloud.google.com</span> → select your project</li>
-                <li>APIs & Services → Enable <span style={{fontWeight:700}}>Google Calendar API</span> + <span style={{fontWeight:700}}>Gmail API</span></li>
+                <li>Go to <span style={{fontWeight:`var(--nc-fw-strong, 700)`}}>console.cloud.google.com</span> → select your project</li>
+                <li>APIs & Services → Enable <span style={{fontWeight:`var(--nc-fw-strong, 700)`}}>Google Calendar API</span> + <span style={{fontWeight:`var(--nc-fw-strong, 700)`}}>Gmail API</span></li>
                 <li>Credentials → Create → OAuth 2.0 Client ID → Web Application</li>
                 <li>Add origins: <span style={{fontFamily:NC_MONO_STACK,background:T.card,padding:"1px 4px",borderRadius:3}}>https://onetaskonly-app.firebaseapp.com</span></li>
                 <li>Copy the Client ID and paste below</li>
               </ol>
             </div>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,fontWeight:500,display:"block",marginBottom:6}}>OAuth 2.0 Client ID</label>
+              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`,display:"block",marginBottom:6}}>OAuth 2.0 Client ID</label>
               <TextField
                 value={AS.googleClientId||""}
                 onInput={e=>setAS(p=>({...p,googleClientId:e.target.value.trim()}))}

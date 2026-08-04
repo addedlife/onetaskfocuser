@@ -1851,8 +1851,21 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const isDark = (()=>{const h=sc.bg||GV_CLEAN.bg;const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
   const T = {...sc, isDark, glow:!!sc.glow, accent: sc.primary || GV_CLEAN.accent, success: sc.success || GV_CLEAN.success, danger: sc.danger || GV_CLEAN.danger, warning: sc.warning || GV_CLEAN.warning, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
   const C = cleanTheme(T);
+  // ── Readability slider → the whole five-step weight scale ──
+  // The slider sets the RESTING weight; the other four steps are fixed offsets from
+  // it, so emphasis stays proportional at every setting instead of the app getting
+  // more contrasty as it gets lighter. At the 400 default these come out 300 / 400 /
+  // 500 / 600 / 700 — exactly the weights the app shipped with, so nothing moves
+  // until the owner moves the slider. Clamped to the real CSS range at both ends.
   const fontWeightNormal = Math.max(320, Math.min(560, Number(AS?.fontWeightScale || 400)));
-  const fontWeightStrong = Math.max(420, Math.min(700, fontWeightNormal + 110));
+  const fwStep = off => Math.max(100, Math.min(900, fontWeightNormal + off));
+  const fontWeightVars = {
+    "--nc-fw-light": fwStep(-100),
+    "--nc-fw-normal": fwStep(0),
+    "--nc-fw-medium": fwStep(100),
+    "--nc-fw-semibold": fwStep(200),
+    "--nc-fw-strong": fwStep(300),
+  };
   const deskPhoneThemePalette = AS?.colorScheme === "material"
     ? "material"
     : isDark
@@ -3555,7 +3568,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div ref={appRef} className="nc-suite-root" style={{overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:C.text,display:"flex",flexDirection:"column",alignItems:"center","--nc-font-weight-normal":fontWeightNormal,"--nc-font-weight-strong":fontWeightStrong}}>
+    <div ref={appRef} className="nc-suite-root" style={{overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:C.text,display:"flex",flexDirection:"column",alignItems:"center",...fontWeightVars}}>
       <style>{NC_GLOBAL_CSS}</style>
       {/* Theme-reactive M3 bridge: pins --shp-color-* (and thus every --md-sys-color-* role) to the active theme T. Must come AFTER NC_GLOBAL_CSS to win the cascade. */}
       <style>{themeVarsCss(T)}</style>
@@ -3580,7 +3593,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {celeb && <Confetti colors={ap.map(p=>p.color)}/>}
       {/* Queue "Added" toast — global, shows regardless of active tab */}
       {queueToast && (
-        <div key={queueToastKey} style={{position:"fixed",bottom:"clamp(90px,14vh,130px)",left:"50%",transform:"translateX(-50%)",background:queueToast,color:"#fff",borderRadius:RADIUS.pill,padding:"6px 16px",fontSize:NC_TYPE.small,fontWeight:700,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",boxShadow:ELEV[3],animation:"ot-queue-toast 5s ease forwards",pointerEvents:"none",zIndex:Z.toast,display:"flex",alignItems:"center",gap:6}}>
+        <div key={queueToastKey} style={{position:"fixed",bottom:"clamp(90px,14vh,130px)",left:"50%",transform:"translateX(-50%)",background:queueToast,color:"#fff",borderRadius:RADIUS.pill,padding:"6px 16px",fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",boxShadow:ELEV[3],animation:"ot-queue-toast 5s ease forwards",pointerEvents:"none",zIndex:Z.toast,display:"flex",alignItems:"center",gap:6}}>
           {suiteIcon("star_rate", 14)} Added to queue
         </div>
       )}
@@ -3590,7 +3603,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {optConfirm.kind === "pinOverride" ? (
               <>
                 <div style={{fontSize:28,marginBottom:14,lineHeight:1,display:"flex",justifyContent:"center",color:C.text}}>{suiteIcon("push_pin", 32)}</div>
-                <p style={{fontSize:NC_TYPE.title,fontWeight:700,color:C.text,margin:"0 0 8px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>Override a pin?</p>
+                <p style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-strong, 700)`,color:C.text,margin:"0 0 8px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>Override a pin?</p>
                 <p style={{fontSize:NC_TYPE.meta,color:C.muted,margin:"0 0 6px",fontFamily:NC_FONT_STACK,lineHeight:1.5}}>AI flagged <strong style={{color:C.text}}>{optConfirm.taskName}</strong> as urgent enough to jump above your pinned tasks.</p>
                 <p style={{fontSize:NC_TYPE.small,color:C.faint,margin:"0 0 26px",fontFamily:NC_FONT_STACK,lineHeight:1.5,fontStyle:"italic"}}>{optConfirm.reason}</p>
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
@@ -3603,7 +3616,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             ) : (
               <>
                 <div style={{fontSize:28,marginBottom:14,lineHeight:1,display:"flex",justifyContent:"center",color:C.text}}>{suiteIcon("star_rate", 32)}</div>
-                <p style={{fontSize:NC_TYPE.title,fontWeight:700,color:C.text,margin:"0 0 10px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>Queue already looks sharp</p>
+                <p style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-strong, 700)`,color:C.text,margin:"0 0 10px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>Queue already looks sharp</p>
                 <p style={{fontSize:NC_TYPE.meta,color:C.muted,margin:"0 0 26px",fontFamily:NC_FONT_STACK,lineHeight:1.6}}>{optConfirm.insight || "The current order is already well-prioritized."}</p>
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
                   <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={38} labelSize={NC_TYPE.meta}
@@ -3620,7 +3633,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         <div style={{position:"fixed",inset:0,zIndex:Z.modalCritical,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.38)"}} onClick={()=>setFirstStepModal(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,padding:"28px 28px 24px",maxWidth:380,width:"90%",boxShadow:ELEV[4],animation:"ot-fade 0.2s"}}>
             <div style={{fontSize:22,marginBottom:6,lineHeight:1,display:"flex",justifyContent:"center",color:C.text}}>{suiteIcon("star_rate", 24)}</div>
-            <p style={{fontSize:NC_TYPE.meta,fontWeight:700,color:C.text,margin:"0 0 4px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>First step</p>
+            <p style={{fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-strong, 700)`,color:C.text,margin:"0 0 4px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>First step</p>
             <p style={{fontSize:NC_TYPE.small,color:C.faint,margin:"0 0 16px",fontFamily:NC_FONT_STACK,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstStepModal.task.text}</p>
             {firstStepModal.loading ? (
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 0 20px",color:C.faint,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK}}>
@@ -3655,7 +3668,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setFocusSuggest(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,padding:"24px 24px 20px",maxWidth:420,width:"90%",boxShadow:ELEV[4]}}>
             <div style={{fontSize:22,marginBottom:8,lineHeight:1,display:"flex",justifyContent:"center",color:C.text}}>{suiteIcon("auto_awesome", 24)}</div>
-            <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:"0 0 4px",color:C.text,fontFamily:NC_FONT_STACK,textAlign:"center"}}>Focus on these three</h3>
+            <h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:"0 0 4px",color:C.text,fontFamily:NC_FONT_STACK,textAlign:"center"}}>Focus on these three</h3>
             <p style={{fontSize:NC_TYPE.small,color:C.faint,margin:"0 0 16px",fontFamily:NC_FONT_STACK,textAlign:"center"}}>A quick look at your plate and calendar</p>
             {focusSuggest.loading ? (
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"16px 0 24px",color:C.faint,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK}}>
@@ -3668,7 +3681,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:8}}>
                 {focusSuggest.items.map((line, i) => (
                   <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 12px",background:C.bgSoft,borderRadius:RADIUS.sm}}>
-                    <span style={{fontSize:NC_TYPE.title,fontWeight:700,color:C.accent,fontFamily:NC_FONT_STACK,lineHeight:1.3}}>{i+1}</span>
+                    <span style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-strong, 700)`,color:C.accent,fontFamily:NC_FONT_STACK,lineHeight:1.3}}>{i+1}</span>
                     <span style={{fontSize:NC_TYPE.meta,color:C.text,fontFamily:NC_FONT_STACK,lineHeight:1.4}}>{line}</span>
                   </div>
                 ))}
@@ -3685,7 +3698,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {listNameModal && (
         <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setListNameModal(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,padding:"22px 20px",maxWidth:380,width:"90%",boxShadow:ELEV[4]}}>
-            <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:"0 0 14px",color:C.text,fontFamily:NC_FONT_STACK}}>
+            <h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:"0 0 14px",color:C.text,fontFamily:NC_FONT_STACK}}>
               {listNameModal.mode === 'new' ? '+ New list' : 'Rename list'}
             </h3>
             <input
@@ -3710,7 +3723,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {restoreConfirm && (
         <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setRestoreConfirm(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,padding:"22px 20px",maxWidth:400,width:"90%",boxShadow:ELEV[4]}}>
-            <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:"0 0 12px",color:C.text,fontFamily:NC_FONT_STACK}}>Restore from backup?</h3>
+            <h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:"0 0 12px",color:C.text,fontFamily:NC_FONT_STACK}}>Restore from backup?</h3>
             <div style={{fontSize:NC_TYPE.meta,color:C.muted,margin:"0 0 16px",lineHeight:1.6,fontFamily:NC_FONT_STACK}}>
               <div>• {restoreConfirm.taskCount} task{restoreConfirm.taskCount!==1?'s':''}</div>
               <div>• {restoreConfirm.shailaCount} shaila record{restoreConfirm.shailaCount!==1?'s':''}</div>
@@ -3779,7 +3792,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {justStartId && jsMinimized && (
         <div onClick={()=>setJsMinimized(false)} style={{position:"fixed",bottom:16,right:16,zIndex:Z.docked,background:curT?gP(pris,curT.priority).color:C.faint,borderRadius:RADIUS.md,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.2)",animation:"ot-fade 0.2s"}}>
           <IC.Timer s={12} c="#fff"/>
-          <span style={{fontSize:NC_TYPE.body,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:500}}>Just Start</span>
+          <span style={{fontSize:NC_TYPE.body,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`}}>Just Start</span>
         </div>
       )}
       {/* Voice input — root level so it survives tab switches */}
@@ -3809,7 +3822,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {shailaDelPrompt && (
         <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaDelPrompt(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,padding:"22px 20px",maxWidth:380,width:"90%",boxShadow:ELEV[4]}}>
-            <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:"0 0 8px",color:C.text,fontFamily:NC_FONT_STACK}}>Also delete from Shaila record?</h3>
+            <h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:"0 0 8px",color:C.text,fontFamily:NC_FONT_STACK}}>Also delete from Shaila record?</h3>
             <p style={{fontSize:NC_TYPE.meta,color:C.muted,margin:"0 0 18px",lineHeight:1.5,fontFamily:NC_FONT_STACK}}>
               The task <strong>"{shailaDelPrompt.taskText?.substring(0,50)}"</strong> was removed from your queue. Delete it from the Shaila Transcriber record too?
             </p>
@@ -3827,7 +3840,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaReconcile(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,padding:"22px 20px",maxWidth:480,width:"90%",maxHeight:"80vh",overflowY:"auto",boxShadow:ELEV[4]}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0,color:C.text,fontFamily:NC_FONT_STACK,display:"flex",alignItems:"center",gap:8}}>{suiteIcon("refresh",18)} Shaila Sync Check</h3>
+              <h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0,color:C.text,fontFamily:NC_FONT_STACK,display:"flex",alignItems:"center",gap:8}}>{suiteIcon("refresh",18)} Shaila Sync Check</h3>
               <button onClick={()=>setShailaReconcile(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",padding:4}}>{suiteIcon("close",18)}</button>
             </div>
 
@@ -3835,7 +3848,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {shailaReconcile.missingTasks.length > 0 && (
               <div style={{marginBottom:16}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                  <p style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.muted,margin:0,fontFamily:NC_FONT_STACK}}>In Transcriber, no task in queue ({shailaReconcile.missingTasks.length}):</p>
+                  <p style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.muted,margin:0,fontFamily:NC_FONT_STACK}}>In Transcriber, no task in queue ({shailaReconcile.missingTasks.length}):</p>
                   <button onClick={()=>{
                     const newTasks = shailaReconcile.missingTasks.flatMap(s => {
                       const parentText = s.synopsis||s.content||s.parsedShaila||"New shaila";
@@ -3849,7 +3862,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                     uT(ts=>[...ts, ...newTasks]);
                     setShailaReconcile(prev=>({...prev, missingTasks:[]}));
                     showToast(`Added ${shailaReconcile.missingTasks.length} shaila${shailaReconcile.missingTasks.length!==1?"s":""} to queue`,3000);
-                  }} style={{fontSize:NC_TYPE.meta,padding:"4px 10px",borderRadius:RADIUS.sm,border:"none",background:C.warning,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,whiteSpace:"nowrap"}}>+ Add all ({shailaReconcile.missingTasks.length})</button>
+                  }} style={{fontSize:NC_TYPE.meta,padding:"4px 10px",borderRadius:RADIUS.sm,border:"none",background:C.warning,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`,whiteSpace:"nowrap"}}>+ Add all ({shailaReconcile.missingTasks.length})</button>
                 </div>
                 <div style={{maxHeight:240,overflowY:"auto"}}>
                 {shailaReconcile.missingTasks.map(s => (
@@ -3867,7 +3880,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         uT(ts=>[...ts, ...newTasks]);
                         setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
                         showToast("Added to queue",2000);
-                      }} style={{fontSize:NC_TYPE.meta,padding:"5px 10px",borderRadius:RADIUS.sm,border:"none",background:C.warning,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500}}>+ Add</button>
+                      }} style={{fontSize:NC_TYPE.meta,padding:"5px 10px",borderRadius:RADIUS.sm,border:"none",background:C.warning,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`}}>+ Add</button>
                       <button onClick={()=>{
                         setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
                       }} style={{fontSize:NC_TYPE.meta,padding:"5px 8px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:"none",color:C.faint,cursor:"pointer",fontFamily:NC_FONT_STACK}}>Skip</button>
@@ -3881,7 +3894,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {/* Tasks without a shaila record */}
             {shailaReconcile.missingShailos.length > 0 && (
               <div style={{marginBottom:16}}>
-                <p style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.muted,margin:"0 0 8px",fontFamily:NC_FONT_STACK}}>In task queue, no transcriber record:</p>
+                <p style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.muted,margin:"0 0 8px",fontFamily:NC_FONT_STACK}}>In task queue, no transcriber record:</p>
                 {shailaReconcile.missingShailos.map(t => (
                   <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:C.bgSoft,borderRadius:RADIUS.sm,marginBottom:4}}>
                     <span style={{fontSize:NC_TYPE.meta,color:C.text,fontFamily:NC_FONT_STACK,flex:1,marginRight:8}}>{t.text?.substring(0,60)}</span>
@@ -3891,7 +3904,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         setShailaReconcile(prev=>({...prev, missingShailos:prev.missingShailos.filter(x=>x.id!==t.id)}));
                         showToast("Added to transcriber",2000);
                       });
-                    }} style={{fontSize:NC_TYPE.meta,padding:"5px 10px",borderRadius:RADIUS.sm,border:"none",background:C.warning,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,whiteSpace:"nowrap"}}>+ Add record</button>
+                    }} style={{fontSize:NC_TYPE.meta,padding:"5px 10px",borderRadius:RADIUS.sm,border:"none",background:C.warning,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`,whiteSpace:"nowrap"}}>+ Add record</button>
                   </div>
                 ))}
               </div>
@@ -3900,7 +3913,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {/* Status mismatches */}
             {shailaReconcile.statusMismatches.length > 0 && (
               <div style={{marginBottom:16}}>
-                <p style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.muted,margin:"0 0 8px",fontFamily:NC_FONT_STACK}}>Status mismatch:</p>
+                <p style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.muted,margin:"0 0 8px",fontFamily:NC_FONT_STACK}}>Status mismatch:</p>
                 {shailaReconcile.statusMismatches.map(m => (
                   <div key={m.task.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:C.bgSoft,borderRadius:RADIUS.sm,marginBottom:4}}>
                     <div style={{flex:1,marginRight:8}}>
@@ -3911,7 +3924,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       uT(ts=>ts.map(x=>x.id===m.task.id?{...x,completed:true,completedAt:Date.now()}:x));
                       setShailaReconcile(prev=>({...prev, statusMismatches:prev.statusMismatches.filter(x=>x.task.id!==m.task.id)}));
                       showToast("Task completed",2000);
-                    }} style={{fontSize:NC_TYPE.meta,padding:"5px 10px",borderRadius:RADIUS.sm,border:"none",background:C.success,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>Complete {suiteIcon("check_circle",14)}</button>
+                    }} style={{fontSize:NC_TYPE.meta,padding:"5px 10px",borderRadius:RADIUS.sm,border:"none",background:C.success,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>Complete {suiteIcon("check_circle",14)}</button>
                   </div>
                 ))}
               </div>
@@ -3962,7 +3975,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,boxShadow:ELEV[4],width:"min(600px,100%)",maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",fontFamily:NC_FONT_STACK}}>
             <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${C.divider}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
               <div>
-                <div style={{fontSize:NC_TYPE.title,fontWeight:500,color:C.text}}>Transcription Holding Pen</div>
+                <div style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-medium, 500)`,color:C.text}}>Transcription Holding Pen</div>
                 <div style={{fontSize:NC_TYPE.body,color:C.faint,marginTop:2}}>Recordings & transcripts from every device — kept 10 days, synced to your account</div>
               </div>
               <IconBtn icon="close" iconSize={20} onClick={()=>setShowPenPanel(false)} aria-label="Close"/>
@@ -3983,13 +3996,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   <div key={rec.id} style={{background:C.bgSoft,border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,padding:10}}>
                     <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start"}}>
                       <div style={{minWidth:0}}>
-                        <div style={{fontSize:NC_TYPE.body,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+                        <div style={{fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-strong, 700)`,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
                         {/* The one-liner that says WHICH recording this is. */}
                         {rec.summary && (
                           <div style={{fontSize:NC_TYPE.meta,color:C.text,marginTop:2,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{rec.summary}</div>
                         )}
                         <div style={{fontSize:NC_TYPE.meta,color:C.faint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {((rec.size||0)/1024/1024).toFixed(1)} MB · {whereNote}</div>
-                        <div style={{fontSize:NC_TYPE.meta,color:statusColor,marginTop:2,fontWeight:500}}>{statusTxt}</div>
+                        <div style={{fontSize:NC_TYPE.meta,color:statusColor,marginTop:2,fontWeight:`var(--nc-fw-medium, 500)`}}>{statusTxt}</div>
                       </div>
                       <div style={{display:"flex",gap:4,flexShrink:0}}>
                         <IconBtn icon={busy ? "hourglass_top" : "replay"} iconSize={18} color={hasAI&&!pendingRetryId?C.accent:C.faint}
@@ -4022,7 +4035,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {/* Blocked resume nudge */}
       {blockedResume && actT.find(t=>t.id===blockedResume) && (
         <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:C.bg,border:`1.5px solid ${C.divider}`,borderRadius:RADIUS.md,padding:"12px 16px",boxShadow:ELEV[3],zIndex:Z.modal,maxWidth:340,width:"90%",animation:"ot-fade 0.3s"}}>
-          <p style={{fontSize:NC_TYPE.body,fontWeight:600,margin:"0 0 4px",fontFamily:NC_FONT_STACK}}>Ready to try again?</p>
+          <p style={{fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-semibold, 600)`,margin:"0 0 4px",fontFamily:NC_FONT_STACK}}>Ready to try again?</p>
           <p style={{fontSize:NC_TYPE.meta,color:C.muted,margin:"0 0 10px",fontFamily:NC_FONT_STACK}}>{actT.find(t=>t.id===blockedResume)?.text}</p>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>{
@@ -4033,7 +4046,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               if(blockedTmr.current[blockedResume]){clearTimeout(blockedTmr.current[blockedResume]);delete blockedTmr.current[blockedResume];}
               setBlockedResume(null);
             }} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:"none",cursor:"pointer",fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,color:C.muted}}>Later</button>
-            <button onClick={()=>resumeBlocked(blockedResume)} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||C.accent),cursor:"pointer",fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,fontWeight:500}}>Resume</button>
+            <button onClick={()=>resumeBlocked(blockedResume)} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||C.accent),cursor:"pointer",fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`}}>Resume</button>
           </div>
         </div>
       )}
@@ -4045,18 +4058,18 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {chgPriIsSubtask && (
               <div style={{display:"flex",gap:6,marginBottom:14,background:C.bgSoft,borderRadius:RADIUS.sm,padding:4}}>
                 {[{v:'one',label:'This step only'},{v:'group',label:'All remaining steps'}].map(opt => (
-                  <button key={opt.v} onClick={()=>setChgPriScope(opt.v)} style={{flex:1,padding:"6px 0",borderRadius:RADIUS.sm,border:"none",background:chgPriScope===opt.v?C.bg:"transparent",fontWeight:chgPriScope===opt.v?500:400,color:chgPriScope===opt.v?C.text:C.faint,fontSize:NC_TYPE.body,cursor:"pointer",fontFamily:NC_FONT_STACK,boxShadow:chgPriScope===opt.v?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
+                  <button key={opt.v} onClick={()=>setChgPriScope(opt.v)} style={{flex:1,padding:"6px 0",borderRadius:RADIUS.sm,border:"none",background:chgPriScope===opt.v?C.bg:"transparent",fontWeight:chgPriScope===opt.v?`var(--nc-fw-medium, 500)`:`var(--nc-fw-normal, 400)`,color:chgPriScope===opt.v?C.text:C.faint,fontSize:NC_TYPE.body,cursor:"pointer",fontFamily:NC_FONT_STACK,boxShadow:chgPriScope===opt.v?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
                     {opt.label}
                   </button>
                 ))}
               </div>
             )}
-            <p style={{fontSize:NC_TYPE.body,fontWeight:600,margin:"0 0 14px",fontFamily:NC_FONT_STACK}}>
+            <p style={{fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-semibold, 600)`,margin:"0 0 14px",fontFamily:NC_FONT_STACK}}>
               {chgPriIsSubtask && chgPriScope==='group' ? 'Change all remaining steps:' : 'Change priority:'}
             </p>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               {ap.map(p => (
-                <button key={p.id} onClick={()=>chgPriority(chgPri,p.id,chgPriIsSubtask?chgPriScope:'one')} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:RADIUS.sm,border:`2px solid ${p.color}`,background:pBg(p.color),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:textOnPastel(AS.colorScheme,T.text,pBg(p.color))}}>
+                <button key={p.id} onClick={()=>chgPriority(chgPri,p.id,chgPriIsSubtask?chgPriScope:'one')} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:RADIUS.sm,border:`2px solid ${p.color}`,background:pBg(p.color),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,color:textOnPastel(AS.colorScheme,T.text,pBg(p.color))}}>
                   <div style={{width:12,height:12,borderRadius:"50%",background:p.color}}/>{p.label}
                 </button>
               ))}
@@ -4068,7 +4081,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {delConf && (
         <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setDelConf(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,padding:"32px 28px",maxWidth:340,textAlign:"center",boxShadow:ELEV[4]}}>
-            <h3 style={{margin:"0 0 12px",fontSize:18,fontWeight:500}}>Delete list?</h3>
+            <h3 style={{margin:"0 0 12px",fontSize:18,fontWeight:`var(--nc-fw-medium, 500)`}}>Delete list?</h3>
             <div style={{display:"flex",gap:10}}>
               <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={44} labelSize={13} style={{flex:1}}
                 onClick={()=>setDelConf(null)}>Cancel</ActionBtn>
@@ -4083,7 +4096,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {showStreak && (
         <div style={{position:"fixed",top:"50%",left:"50%",zIndex:Z.celebration,pointerEvents:"none",animation:"ot-streak 2.6s forwards",textAlign:"center",fontFamily:NC_FONT_STACK}}>
           <div style={{fontSize:40,marginBottom:6,display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>{suiteIcon("whatshot",48)}</div>
-          <div style={{fontSize:22,fontWeight:700,color:C.text,textShadow:"0 2px 12px rgba(0,0,0,0.12)"}}>On a roll!</div>
+          <div style={{fontSize:22,fontWeight:`var(--nc-fw-strong, 700)`,color:C.text,textShadow:"0 2px 12px rgba(0,0,0,0.12)"}}>On a roll!</div>
           <div style={{fontSize:NC_TYPE.body,color:C.muted,marginTop:4}}>{todayCompCount} done today</div>
         </div>
       )}
@@ -4284,7 +4297,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexShrink: 0 }}>
                 <button onClick={()=>openCommandView("focus")} title="Back"
                   style={{ width: 36, height: 36, borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>←</button>
-                <span style={{ fontWeight: 600, fontSize: NC_TYPE.title, color: T.text }}>Phone</span>
+                <span style={{ fontWeight: `var(--nc-fw-semibold, 600)`, fontSize: NC_TYPE.title, color: T.text }}>Phone</span>
               </div>
               <NerveCenterPhoneSurface
                 T={T}
@@ -4326,10 +4339,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 return (
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 2px",height:40}}>
                     <div style={{display:"flex",alignItems:"baseline",gap:10}}>
-                      <span style={{fontSize:CK,fontFamily:NC_FONT_STACK,fontWeight:300,color:C.muted,letterSpacing:3,lineHeight:1,display:"block"}}>
+                      <span style={{fontSize:CK,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-light, 300)`,color:C.muted,letterSpacing:3,lineHeight:1,display:"block"}}>
                         {clockTime.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                       </span>
-                      {todayCompCount > 0 && <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,letterSpacing:.3,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("done",11)} {todayCompCount} today</span>}
+                      {todayCompCount > 0 && <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,color:C.faint,letterSpacing:.3,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("done",11)} {todayCompCount} today</span>}
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:4}}>
                       {AS.legacyCompleteUI && <IconButton onClick={()=>legacyCompTask(curT.id)} title="Legacy complete (no timestamp)" style={{opacity:.35}}><IC.Clock s={CK-4} c={cardColor0}/></IconButton>}
@@ -4342,7 +4355,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 );
               })() : (
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 2px",height:40}}>
-                  <span style={{fontSize:28,fontFamily:NC_FONT_STACK,fontWeight:300,color:C.muted,letterSpacing:3,lineHeight:1,display:"block"}}>
+                  <span style={{fontSize:28,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-light, 300)`,color:C.muted,letterSpacing:3,lineHeight:1,display:"block"}}>
                     {clockTime.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                   </span>
                   <div style={{width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",opacity:.3}}><IC.Check s={28} c={C.divider}/></div>
@@ -4369,8 +4382,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       {showRip && <Ripple color={_fc}/>}
                       {/* Completion flash overlay */}
                       {compFlash && <div style={{position:"absolute",inset:0,borderRadius:"inherit",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10,animation:"ot-comp-flash 0.6s forwards",pointerEvents:"none",background:cardColor}}><span style={{fontSize:72,color:_fc,lineHeight:1,display:"flex",alignItems:"center"}}>{suiteIcon("done",72)}</span></div>}
-                      <span style={{fontSize:NC_TYPE.small,color:_fc50,fontFamily:NC_FONT_STACK,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase"}}>{cp.label}</span>
-                      {curT.mrsW && <span style={{fontSize:NC_TYPE.small,color:_fc40,fontFamily:NC_FONT_STACK,fontWeight:600,letterSpacing:.5}}>Mrs. W</span>}
+                      <span style={{fontSize:NC_TYPE.small,color:_fc50,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`,letterSpacing:1.5,textTransform:"uppercase"}}>{cp.label}</span>
+                      {curT.mrsW && <span style={{fontSize:NC_TYPE.small,color:_fc40,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,letterSpacing:.5}}>Mrs. W</span>}
                       {editId === curT.id ? (
                         <div style={{display:"flex",gap:8,width:"100%"}} onFocus={pauseZ} onBlur={resumeZ}>
                           <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(curT.id);if(e.key==="Escape")setEditId(null);}} style={{flex:1,fontSize:"clamp(16px,3vw,22px)",fontFamily:NC_FONT_STACK,border:`2px solid ${_fcBrd}`,borderRadius:RADIUS.md,padding:"10px 16px",outline:"none",color:_fc,background:_fcBgL}}/>
@@ -4385,7 +4398,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                             if (!curT.createdAt) return null;
                             const d = Math.floor(getTaskAgeHours(curT) / 24);
                             if (d < 1) return null;
-                            return <p style={{fontSize:NC_TYPE.small,color:_fc40,marginTop:4,fontFamily:NC_FONT_STACK,fontWeight:500,letterSpacing:.3}}>{d === 1 ? "since yesterday" : `${d} days waiting`}</p>;
+                            return <p style={{fontSize:NC_TYPE.small,color:_fc40,marginTop:4,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`,letterSpacing:.3}}>{d === 1 ? "since yesterday" : `${d} days waiting`}</p>;
                           })()}
                         </div>
                       )}
@@ -4437,7 +4450,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         onMouseLeave={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=a?1:0;}}>
                         <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:30,height:30,border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:8,flexShrink:0}}><IC.Mic s={16} c={C.muted}/></button>
                         <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:sz,height:sz,borderRadius:"50%",background:clr,border:a?`3px solid ${softBorderC}`:"3px solid transparent",cursor:"pointer",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:glowShadow,flexShrink:0}}/>
-                        <span style={{fontSize:NC_TYPE.meta,color:C.faint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:10,letterSpacing:.3}}>{p.isShaila?"Shaila":p.label}</span>
+                        <span style={{fontSize:NC_TYPE.meta,color:C.faint,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,textAlign:"center",marginTop:10,letterSpacing:.3}}>{p.isShaila?"Shaila":p.label}</span>
                       </div>
                     );
                   })}
@@ -4454,7 +4467,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           onMouseLeave={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=a?1:0;}}>
                           <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:22,height:22,border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:6,flexShrink:0}}><IC.Mic s={12} c={C.muted}/></button>
                           <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",height:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",borderRadius:"50%",background:p.color,border:a?`2px solid ${softBorderC}`:"2px solid transparent",cursor:"pointer",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:a?`0 4px 16px ${p.color}60`:`0 2px 8px ${p.color}25`,flexShrink:0}}/>
-                          <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:7,letterSpacing:.3}}>{p.label}</span>
+                          <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,textAlign:"center",marginTop:7,letterSpacing:.3}}>{p.label}</span>
                         </div>
                       );
                     })}
@@ -4478,7 +4491,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       <FilledIconButton onClick={addTask} style={{"--md-filled-icon-button-container-color":gP(pris,selPri).color,"--md-filled-icon-button-icon-color":textOnColor(gP(pris,selPri).color),flexShrink:0}}><IC.Plus s={16} c={textOnColor(gP(pris,selPri).color)}/></FilledIconButton>
                     </form>
                     {newTask.trim().length>3 && (
-                      <button onClick={()=>{const txt=newTask.trim();if(!txt)return;setNewTask("");setSelPri(null);setShowBD({id:"__new__",text:txt,priority:selPri});}} style={{marginTop:6,width:"100%",padding:"6px 0",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:700,color:priText(gP(pris,selPri).color),background:"none",border:`1px dashed ${gP(pris,selPri).color}60`,borderRadius:RADIUS.pill,cursor:"pointer",letterSpacing:.5,opacity:.85}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.75}>
+                      <button onClick={()=>{const txt=newTask.trim();if(!txt)return;setNewTask("");setSelPri(null);setShowBD({id:"__new__",text:txt,priority:selPri});}} style={{marginTop:6,width:"100%",padding:"6px 0",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`,color:priText(gP(pris,selPri).color),background:"none",border:`1px dashed ${gP(pris,selPri).color}60`,borderRadius:RADIUS.pill,cursor:"pointer",letterSpacing:.5,opacity:.85}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.75}>
                         ✦ Shatter into crystals
                       </button>
                     )}
@@ -4542,7 +4555,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       onClick={()=>setLpMenu(false)}>
                       {menuSections.map((sec,si)=>(
                         <div key={si}>
-                          <div style={{fontSize:NC_TYPE.small,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,color:C.faint,padding:"8px 16px 4px",fontFamily:NC_FONT_STACK}}>{sec.cat}</div>
+                          <div style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,textTransform:"uppercase",letterSpacing:1.5,color:C.faint,padding:"8px 16px 4px",fontFamily:NC_FONT_STACK}}>{sec.cat}</div>
                           {sec.items.map((item,ii)=>(
                             <button key={ii} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"7px 16px",background:"none",border:"none",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.body,color:C.text,textAlign:"left",transition:"background 0.1s"}}
                               onMouseEnter={e=>{e.currentTarget.style.background=C.bgSoft;}} onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
@@ -4573,7 +4586,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         {tab !== "focus" && (
           <>
             <header style={{...commandPageWidth,textAlign:"center",paddingTop:40,paddingBottom:4,flexShrink:0}}>
-              <h1 style={{fontSize:22,fontWeight:600,margin:0}}>Shamash Pro 4</h1>
+              <h1 style={{fontSize:22,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0}}>Shamash Pro 4</h1>
               <p style={{color:C.faint,fontSize:NC_TYPE.body,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
@@ -4595,15 +4608,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {/* Queue header: task count + energy indicator + overflow menu */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:NC_TYPE.body,fontWeight:600,fontFamily:NC_FONT_STACK,color:C.muted}}>{effectiveCount} task{effectiveCount!==1?"s":""}</span>
+                <span style={{fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,color:C.muted}}>{effectiveCount} task{effectiveCount!==1?"s":""}</span>
                 {curEnergy && (
-                  <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,padding:"2px 8px",borderRadius:RADIUS.sm,border:`1px solid ${curEnergy==="high"?C.accent:C.divider}`,color:curEnergy==="high"?C.text:C.muted,fontWeight:600}}>
+                  <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,padding:"2px 8px",borderRadius:RADIUS.sm,border:`1px solid ${curEnergy==="high"?C.accent:C.divider}`,color:curEnergy==="high"?C.text:C.muted,fontWeight:`var(--nc-fw-semibold, 600)`}}>
                     {curEnergy==="high"?"⚡ High energy":"🌊 Low energy"}
                     <button onClick={()=>setAS(p=>({...p,currentEnergy:null}))} style={{marginLeft:4,background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.small,color:C.faint,padding:0,lineHeight:1,display:"flex",alignItems:"center"}}>{suiteIcon("close",11)}</button>
                   </span>
                 )}
                 {effectiveCount > overwhelmThreshold && (
-                  <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,padding:"2px 8px",borderRadius:RADIUS.sm,background:focusModeActive?`${C.warning}40`:"transparent",border:`1px solid ${focusModeActive?C.warning+"80":C.divider}`,color:focusModeActive?C.text:C.muted,fontWeight:600,cursor:"pointer"}} onClick={()=>setFocusModeActive(f=>!f)}>
+                  <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,padding:"2px 8px",borderRadius:RADIUS.sm,background:focusModeActive?`${C.warning}40`:"transparent",border:`1px solid ${focusModeActive?C.warning+"80":C.divider}`,color:focusModeActive?C.text:C.muted,fontWeight:`var(--nc-fw-semibold, 600)`,cursor:"pointer"}} onClick={()=>setFocusModeActive(f=>!f)}>
                     😶 {focusModeActive ? "Focus mode on" : "Focus mode"}
                   </span>
                 )}
@@ -4666,7 +4679,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   const isBig = !p.id.startsWith('pri_');
                   return (
                     <button key={p.id} onClick={()=>setQAddPri(sel?null:p.id)} title={p.label}
-                      style={{padding:isBig?"5px 13px":"3px 9px",borderRadius:RADIUS.md,background:sel?clr:clr+"22",border:`1.5px solid ${clr}`,cursor:"pointer",fontSize:isBig?11:10,fontWeight:700,fontFamily:NC_FONT_STACK,color:sel?textOnColor(clr):clr,flexShrink:0,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:sel?`0 2px 8px ${clr}50`:"none"}}
+                      style={{padding:isBig?"5px 13px":"3px 9px",borderRadius:RADIUS.md,background:sel?clr:clr+"22",border:`1.5px solid ${clr}`,cursor:"pointer",fontSize:isBig?11:10,fontWeight:`var(--nc-fw-strong, 700)`,fontFamily:NC_FONT_STACK,color:sel?textOnColor(clr):clr,flexShrink:0,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:sel?`0 2px 8px ${clr}50`:"none"}}
                     >{p.label}</button>
                   );
                 })}
@@ -4724,12 +4737,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           <div draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)}
                             style={{...queueRowBase,borderBottom:`1px solid ${C.divider}`,borderLeft:`3px solid ${tp.color}`,background:rowBg,cursor:"grab"}}>
                             <span style={{cursor:"grab",padding:"2px",opacity:isF ? .75 : .35,flexShrink:0}}><IC.Grab s={12} c={rowSoft}/></span>
-                            <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,color:isF?textOnColor(tp.color):C.faint,fontWeight:600,fontFamily:NC_FONT_STACK,flexShrink:0}}>
+                            <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,color:isF?textOnColor(tp.color):C.faint,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,flexShrink:0}}>
                               {dispPos}
                             </span>
                             <span onClick={()=>setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;})}
-                              style={{flex:1,minWidth:0,fontSize:NC_TYPE.body,cursor:"pointer",fontWeight:isF?500:400,color:rowText,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
-                              {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:NC_TYPE.small,color:rowAccent,fontWeight:700,fontFamily:NC_FONT_STACK,marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
+                              style={{flex:1,minWidth:0,fontSize:NC_TYPE.body,cursor:"pointer",fontWeight:isF?`var(--nc-fw-medium, 500)`:`var(--nc-fw-normal, 400)`,color:rowText,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
+                              {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:NC_TYPE.small,color:rowAccent,fontWeight:`var(--nc-fw-strong, 700)`,fontFamily:NC_FONT_STACK,marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
                               {task.parentTask}
                             </span>
                             {task.shailaId && (() => {
@@ -4807,12 +4820,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       return (
                         <div key={task.id} draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)} style={{...queueRowBase,borderBottom:`1px solid ${C.divider}`,borderLeft:`3px solid ${tp.color}`,background:rowBg,cursor:"grab",opacity:task.blocked ? .82 : 1}}>
                           <span style={{cursor:"grab",padding:"2px",opacity:isF ? .75 : .35,flexShrink:0}}><IC.Grab s={12} c={_qSoft}/></span>
-                          <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,color:isF?textOnColor(tp.color):C.faint,fontWeight:600,fontFamily:NC_FONT_STACK,flexShrink:0}}>{dispPos}</span>
+                          <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,color:isF?textOnColor(tp.color):C.faint,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,flexShrink:0}}>{dispPos}</span>
                           {editId === task.id ? (
                             <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,minWidth:0,fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:RADIUS.sm,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text, pBg(tp.color)),background:pBg(tp.color)}}/>
                           ) : (
                             <div style={{flex:1,display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
-                              <span onClick={()=>startEd(task)} style={{fontSize:NC_TYPE.body,cursor:"text",fontWeight:isF?500:400,color:_qText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
+                              <span onClick={()=>startEd(task)} style={{fontSize:NC_TYPE.body,cursor:"text",fontWeight:isF?`var(--nc-fw-medium, 500)`:`var(--nc-fw-normal, 400)`,color:_qText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
                                 {task.pinned && <span style={{fontSize:NC_TYPE.small,marginRight:4,color:rowAccent,opacity:isF?1:.5,display:"flex",alignItems:"center"}}>{suiteIcon("push_pin",10)}</span>}
                                 {task.text}
                               </span>
@@ -4823,7 +4836,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                                 <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:2,opacity:.8}}>
                                   {aged && <AgeBadge task={task} pris={pris} thresholds={AS.ageThresholds} T={T}/>}
                                   {task.autoAged && (
-                                    <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,padding:"1px 6px 1px 5px",borderRadius:6,background:`${C.accent}18`,border:`1px solid ${C.accent}60`,color:C.accent,fontWeight:600,lineHeight:1.4}}>
+                                    <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,padding:"1px 6px 1px 5px",borderRadius:6,background:`${C.accent}18`,border:`1px solid ${C.accent}60`,color:C.accent,fontWeight:`var(--nc-fw-semibold, 600)`,lineHeight:1.4}}>
                                       ↑ {task.agedFromLabel||"3"}
                                       <button onClick={e=>{e.stopPropagation();undoAging(task.id);}} title="Undo nudge" style={{background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.small,color:`${C.accent}80`,padding:0,lineHeight:1,marginLeft:1,display:"flex",alignItems:"center"}}>{suiteIcon("close",10)}</button>
                                     </span>
@@ -4863,7 +4876,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {/* Snoozed tasks — faded at bottom of queue */}
             {snoozedT.length > 0 && (
               <div style={{marginTop:16,opacity:0.55}}>
-                <p style={{fontSize:NC_TYPE.small,fontWeight:700,letterSpacing:1.5,color:C.faint,fontFamily:NC_FONT_STACK,margin:"0 0 8px 4px",textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>{suiteIcon("bedtime",10)} Sleeping</p>
+                <p style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,letterSpacing:1.5,color:C.faint,fontFamily:NC_FONT_STACK,margin:"0 0 8px 4px",textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>{suiteIcon("bedtime",10)} Sleeping</p>
                 <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,overflow:"hidden",boxShadow:T.shadow}}>
                   {snoozedT.map((t, i) => {
                     const d = new Date(t.snoozedUntil);
@@ -4880,7 +4893,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           <p style={{margin:"2px 0 0",fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK}}>wakes {wakeLabel}</p>
                         </div>
                         <button onClick={()=>wakeTask(t.id)}
-                          style={{flexShrink:0,padding:"4px 10px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.muted,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",whiteSpace:"nowrap"}}
+                          style={{flexShrink:0,padding:"4px 10px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,color:C.muted,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",whiteSpace:"nowrap"}}
                           onMouseEnter={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.text;}}
                           onMouseLeave={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.muted;}}>
                           ↑ Wake now
@@ -4905,11 +4918,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {hasAI && (
               <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:"18px 20px",marginBottom:18,boxShadow:T.shadow}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:0,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("star_rate",10)} AI Coach Insight</h3>
+                  <h3 style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.faint,margin:0,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("star_rate",10)} AI Coach Insight</h3>
                   <button
                     onClick={genAiInsight}
                     disabled={aiInsightLoading || !metrics}
-                    style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:metrics?("pointer"):"default",color:C.muted,opacity:aiInsightLoading ? .5 : 1}}
+                    style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:metrics?("pointer"):"default",color:C.muted,opacity:aiInsightLoading ? .5 : 1}}
                   >
                     {aiInsightLoading ? "Thinking..." : aiInsight ? "↻ Refresh" : "Generate"}
                   </button>
@@ -4939,8 +4952,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       </ul>
                       {takeawayLine && (
                         <div style={{borderTop:`1px solid ${C.divider}`,paddingTop:10,marginTop:2,display:"flex",gap:8,alignItems:"flex-start"}}>
-                          <span style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.2,paddingTop:3,flexShrink:0,whiteSpace:"nowrap"}}>Key Takeaway</span>
-                          <span style={{fontSize:NC_TYPE.body,fontWeight:600,color:C.text,lineHeight:1.5}}>{takeawayLine.replace(/^TAKEAWAY:\s*/i,'')}</span>
+                          <span style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.faint,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.2,paddingTop:3,flexShrink:0,whiteSpace:"nowrap"}}>Key Takeaway</span>
+                          <span style={{fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-semibold, 600)`,color:C.text,lineHeight:1.5}}>{takeawayLine.replace(/^TAKEAWAY:\s*/i,'')}</span>
                         </div>
                       )}
                     </div>
@@ -4959,14 +4972,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       ["Productivity trends","What are my productivity trends over time?"],
                       ["Recommendations","Based on all my data, what should I focus on?"]
                     ].map(([label, prompt]) => (
-                      <button key={label} onClick={()=>{setAiChatOpen(true);sendAiChat(prompt);}} style={{padding:"5px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.muted,cursor:"pointer"}}>{label}</button>
+                      <button key={label} onClick={()=>{setAiChatOpen(true);sendAiChat(prompt);}} style={{padding:"5px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,color:C.muted,cursor:"pointer"}}>{label}</button>
                     ))}
                   </div>
                 )}
 
                 {/* Chat toggle */}
                 {metrics && (
-                  <button onClick={()=>setAiChatOpen(o=>!o)} style={{width:"100%",padding:"6px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.muted,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",marginTop:4}}>
+                  <button onClick={()=>setAiChatOpen(o=>!o)} style={{width:"100%",padding:"6px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,color:C.muted,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",marginTop:4}}>
                     {aiChatOpen ? "Close chat ▲" : "Ask questions about my data ▼"}
                   </button>
                 )}
@@ -5000,7 +5013,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         placeholder="Ask about your patterns, times, priorities..."
                         style={{flex:1,padding:"8px 12px",fontSize:NC_TYPE.body,border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}
                       />
-                      <button onClick={()=>aiChatInput.trim()&&sendAiChat(aiChatInput)} disabled={aiChatLoading||!aiChatInput.trim()} style={{padding:"8px 14px",borderRadius:RADIUS.sm,border:"none",background:C.accent,color:"#fff",fontSize:NC_TYPE.meta,fontWeight:700,fontFamily:NC_FONT_STACK,cursor:"pointer",opacity:aiChatLoading||!aiChatInput.trim()?.4:1}}>Send</button>
+                      <button onClick={()=>aiChatInput.trim()&&sendAiChat(aiChatInput)} disabled={aiChatLoading||!aiChatInput.trim()} style={{padding:"8px 14px",borderRadius:RADIUS.sm,border:"none",background:C.accent,color:"#fff",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-strong, 700)`,fontFamily:NC_FONT_STACK,cursor:"pointer",opacity:aiChatLoading||!aiChatInput.trim()?.4:1}}>Send</button>
                     </div>
                   </div>
                 )}
@@ -5071,7 +5084,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
                           <div style={{width:9,height:9,borderRadius:"50%",background:p.color,flexShrink:0}}/>
                           <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,flex:1,color:C.muted}}>{p.label}</span>
-                          <span style={{fontSize:NC_TYPE.small,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.text}}>{p.n}</span>
+                          <span style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,color:T.text}}>{p.n}</span>
                           <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK}}>{Math.round(p.n/total*100)}%</span>
                         </div>
                       ))}
@@ -5124,7 +5137,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
               return (
                 <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:"18px 20px",marginBottom:18,boxShadow:T.shadow}}>
-                  <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Activity</h3>
+                  <h3 style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.faint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Activity</h3>
 
                   {/* Range tabs */}
                   <div style={{display:"flex",gap:4,marginBottom:16}}>
@@ -5133,7 +5146,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         style={{padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${chartRange===k?C.accent:C.divider}`,
                           background:chartRange===k?C.accent:"transparent",
                           color:chartRange===k?"#fff":C.muted,
-                          fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>
+                          fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,cursor:"pointer"}}>
                         {lbl}
                       </button>
                     ))}
@@ -5143,7 +5156,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   <div style={{marginBottom:4}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
                       <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted}}>{rd.sub}</span>
-                      <span style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:NC_FONT_STACK}}>{total} <span style={{fontSize:NC_TYPE.small,fontWeight:400,color:C.faint}}>done</span></span>
+                      <span style={{fontSize:18,fontWeight:`var(--nc-fw-strong, 700)`,color:C.text,fontFamily:NC_FONT_STACK}}>{total} <span style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-normal, 400)`,color:C.faint}}>done</span></span>
                     </div>
                     <BarChart bars={rd.bars} accentColor={accentColor}/>
                   </div>
@@ -5152,7 +5165,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   <div style={{borderTop:`1px solid ${C.divider}`,margin:"18px 0"}}/>
 
                   {/* Priority donut */}
-                  <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
+                  <h3 style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.faint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
                   <DonutChart slices={chartData.donut}/>
 
                   {/* Divider */}
@@ -5165,7 +5178,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         style={{padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${chartSecondary===k?C.accent:C.divider}`,
                           background:chartSecondary===k?C.accent:"transparent",
                           color:chartSecondary===k?"#fff":C.muted,
-                          fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>
+                          fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,cursor:"pointer"}}>
                         {lbl}
                       </button>
                     ))}
@@ -5210,7 +5223,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                     <div>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
                         <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted}}>total tasks completed, last 90 days</span>
-                        <span style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:NC_FONT_STACK}}>{chartData.cum90[chartData.cum90.length-1]?.n} <span style={{fontSize:NC_TYPE.small,fontWeight:400,color:C.faint}}>total</span></span>
+                        <span style={{fontSize:18,fontWeight:`var(--nc-fw-strong, 700)`,color:C.text,fontFamily:NC_FONT_STACK}}>{chartData.cum90[chartData.cum90.length-1]?.n} <span style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-normal, 400)`,color:C.faint}}>total</span></span>
                       </div>
                       <AreaChart points={chartData.cum90} accentColor={C.accent} showLabels={true}/>
                     </div>
@@ -5221,14 +5234,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
             {/* ── Tip Carousel ── */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <h2 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0}}>Tips</h2>
+              <h2 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0}}>Tips</h2>
               <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK}}>{tipCarouselIdx+1} / {tipCarouselList.length}</span>
             </div>
 
             {/* Category filter pills */}
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
               {TIP_CATS.map(cat => (
-                <button key={cat} onClick={()=>setTipCat(cat)} style={{padding:"4px 12px",borderRadius:RADIUS.sm,border:`1px solid ${tipCat===cat?C.accent:C.divider}`,background:tipCat===cat?C.accent:"transparent",color:tipCat===cat?"#fff":C.muted,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>{cat}</button>
+                <button key={cat} onClick={()=>setTipCat(cat)} style={{padding:"4px 12px",borderRadius:RADIUS.sm,border:`1px solid ${tipCat===cat?C.accent:C.divider}`,background:tipCat===cat?C.accent:"transparent",color:tipCat===cat?"#fff":C.muted,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,cursor:"pointer"}}>{cat}</button>
               ))}
             </div>
 
@@ -5244,7 +5257,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   ) : (
                     <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,fontStyle:"italic"}}>{tipCarouselItem.s}</span>
                   )}
-                  <span style={{background:C.bgSoft,borderRadius:4,padding:"1px 6px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:700,color:C.faint,border:`1px solid ${C.divider}`}}>{tipCarouselItem.cat}</span>
+                  <span style={{background:C.bgSoft,borderRadius:4,padding:"1px 6px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`,color:C.faint,border:`1px solid ${C.divider}`}}>{tipCarouselItem.cat}</span>
                 </div>
                 <div style={{display:"flex",gap:6}}>
                   <button
@@ -5264,28 +5277,28 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {/* ── Stats (collapsible) ── */}
             {metrics ? (
               <details style={{marginTop:24}} open={false}>
-                <summary style={{fontSize:NC_TYPE.body,fontWeight:600,fontFamily:NC_FONT_STACK,cursor:"pointer",color:C.muted,listStyle:"none",display:"flex",alignItems:"center",gap:6,marginBottom:12,userSelect:"none"}}>
+                <summary style={{fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,cursor:"pointer",color:C.muted,listStyle:"none",display:"flex",alignItems:"center",gap:6,marginBottom:12,userSelect:"none"}}>
                   <span style={{fontSize:NC_TYPE.small,opacity:.6}}>▶</span> Your stats
                 </summary>
                 <div style={{paddingTop:8}}>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.total}</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Completed</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Total tasks you've finished</div></div>
-                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.avg}</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Avg time</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Average time from creation to done</div></div>
-                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.sk}d</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Streak</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Consecutive days with completions</div></div>
-                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:NC_TYPE.title,fontWeight:600}}>{metrics.pT||"—"}</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Peak hour</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Your most productive time of day</div></div>
+                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:`var(--nc-fw-semibold, 600)`}}>{metrics.total}</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Completed</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Total tasks you've finished</div></div>
+                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:`var(--nc-fw-semibold, 600)`}}>{metrics.avg}</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Avg time</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Average time from creation to done</div></div>
+                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:`var(--nc-fw-semibold, 600)`}}>{metrics.sk}d</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Streak</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Consecutive days with completions</div></div>
+                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`}}>{metrics.pT||"—"}</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Peak hour</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Your most productive time of day</div></div>
                   </div>
                   {metrics.goodEnoughCount > 0 && (
                     <div style={{background:pBg(T.success),borderRadius:RADIUS.md,padding:"12px 16px",border:`1px solid ${T.success}40`,marginBottom:14,display:"flex",gap:10,alignItems:"center"}}>
                       <IC.GoodEnough s={16} c={C.success}/>
-                      <div><p style={{fontSize:NC_TYPE.meta,fontWeight:600,margin:0,color:C.success,fontFamily:NC_FONT_STACK}}>{metrics.goodEnoughCount} "good enough" completions</p><p style={{fontSize:NC_TYPE.small,color:C.success,margin:0,fontFamily:NC_FONT_STACK}}>That's pragmatic productivity at its finest.</p></div>
+                      <div><p style={{fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0,color:C.success,fontFamily:NC_FONT_STACK}}>{metrics.goodEnoughCount} "good enough" completions</p><p style={{fontSize:NC_TYPE.small,color:C.success,margin:0,fontFamily:NC_FONT_STACK}}>That's pragmatic productivity at its finest.</p></div>
                     </div>
                   )}
                   <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:16,marginBottom:14}}>
-                    <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
+                    <h3 style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
                     {metrics.pS.map(p => (
                       <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:`1px solid ${C.divider}`}}>
                         <div style={{width:10,height:10,borderRadius:"50%",background:p.c,flexShrink:0}}/>
-                        <span style={{flex:1,fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,fontWeight:500}}>{p.l}</span>
+                        <span style={{flex:1,fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`}}>{p.l}</span>
                         <span style={{fontSize:NC_TYPE.meta,color:C.muted,fontFamily:NC_FONT_STACK}}>{p.n} done</span>
                         <span style={{fontSize:NC_TYPE.meta,color:C.muted,fontFamily:NC_FONT_STACK,minWidth:60,textAlign:"right"}}>avg {p.a}</span>
                       </div>
@@ -5294,12 +5307,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   {/* Pattern insights (rule-based) */}
                   {advice.length > 0 && (
                     <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:16,marginBottom:14}}>
-                      <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Patterns</h3>
+                      <h3 style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Patterns</h3>
                       {advice.map((a,i) => <p key={i} style={{fontSize:NC_TYPE.body,lineHeight:1.6,margin:i<advice.length-1?"0 0 10px":0,padding:"9px 11px",background:C.bgSoft,borderRadius:RADIUS.sm,fontFamily:NC_FONT_STACK}}>{a}</p>)}
                     </div>
                   )}
                   <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,overflow:"hidden",marginBottom:32}}>
-                    <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:0,padding:"12px 14px 8px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Completion Log</h3>
+                    <h3 style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:C.faint,margin:0,padding:"12px 14px 8px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Completion Log</h3>
                     <div style={{maxHeight:280,overflowY:"auto"}}>
                       {metrics.cL.map(t => {
                         const tp = gP(pris, t.priority);

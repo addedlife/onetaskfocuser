@@ -380,7 +380,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
     borderRadius: RADIUS.pill, cursor: "pointer", border: "none",
     background: isActive ? C.hover : "transparent",
     color: isActive ? C.text : C.muted,
-    fontFamily: NC_FONT_STACK, fontWeight: 500, fontSize: FZ,
+    fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-medium, 500)`, fontSize: FZ,
     display: "flex", alignItems: "center",
     gap: displayOpen ? 12 : 0, justifyContent: displayOpen ? "flex-start" : "center",
     width: "100%", whiteSpace: "nowrap", flexShrink: 0,
@@ -484,7 +484,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
       <div style={{ marginTop: px(10), marginBottom: px(2), flexShrink: 0 }}>
         <Divider />
         {displayOpen && s > 0.72 && (
-          <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, padding: "4px 14px 4px" }}>Experimental</div>
+          <div style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, letterSpacing: 1.2, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, padding: "4px 14px 4px" }}>Experimental</div>
         )}
       </div>
 
@@ -570,7 +570,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                   <span style={{ position: 'absolute', top: -1, right: -1, width: 8, height: 8, borderRadius: RADIUS.pill, background: laneDot, boxShadow: `0 0 0 2px ${C.bg}` }} />
                 )}
                 {hasUnseenLeak && (
-                  <span style={{ position: 'absolute', top: -3, left: -3, width: 12, height: 12, borderRadius: RADIUS.pill, background: C.danger, color: '#fff', fontSize: NC_TYPE.small, fontWeight: 800, lineHeight: '12px', textAlign: 'center', boxShadow: `0 0 0 2px ${C.bg}` }}>!</span>
+                  <span style={{ position: 'absolute', top: -3, left: -3, width: 12, height: 12, borderRadius: RADIUS.pill, background: C.danger, color: '#fff', fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 800)`, lineHeight: '12px', textAlign: 'center', boxShadow: `0 0 0 2px ${C.bg}` }}>!</span>
                 )}
               </span>
               {displayOpen && (
@@ -586,7 +586,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
               <>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 9100 }} onClick={() => setAiLanePopoverOpen(false)} />
                 <div style={{ position: 'fixed', left: aiLanePopoverPos.left, bottom: aiLanePopoverPos.bottom, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, width: aiLanePopoverPos.width, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', maxHeight: aiLanePopoverPos.maxHeight, overflowY: 'auto', overflowX: 'hidden' }}>
-                  <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 0' }}>AI lane — currently {aiLane.label}</div>
+                  <div style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 0' }}>AI lane — currently {aiLane.label}</div>
                   {aiLane.model && (
                     <div style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_MONO_STACK, padding: '2px 12px 4px' }}>{aiLane.model}</div>
                   )}
@@ -605,7 +605,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                   {/* Manual lane prod (owner 7/19): pick which credential lane serves FIRST.
                       A preference, not a hard pin — the other lanes still catch failures. */}
                   <div style={{ padding: '0 12px 9px' }}>
-                    <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, paddingBottom: 4 }}>Lane override</div>
+                    <div style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, paddingBottom: 4 }}>Lane override</div>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {[['', 'Auto', null], ['primary', 'Primary', 'primary'], ['overflow_01', 'Overflow', 'overflow-01'], ['paid_01', 'Paid', 'paid-01']].map(([value, label, laneId]) => {
                         // Owner ticket MoVWuNw0 ("three ai lanes and no explanation
@@ -660,13 +660,13 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                   </div>
                   {activeLeaks.length > 0 && (
                     <div>
-                      <button onClick={() => setAiSectOpen(s => ({ ...s, leaks: !s.leaks }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: NC_TYPE.small, fontWeight: 700, color: C.danger, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
+                      <button onClick={() => setAiSectOpen(s => ({ ...s, leaks: !s.leaks }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color: C.danger, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
                         <span style={{ flex: 1 }}>Possible leak ({activeLeaks.length})</span>
                         {suiteIcon(aiSectOpen.leaks ? 'expand_less' : 'expand_more', 14)}
                       </button>
                       {aiSectOpen.leaks && [...activeLeaks].reverse().map((leak, i) => (
                         <div key={i} style={{ padding: '6px 12px 10px' }}>
-                          <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600 }}>{leak.jobId}</div>
+                          <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-semibold, 600)` }}>{leak.jobId}</div>
                           <div style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>{leak.reason}</div>
                           <div style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 3, fontStyle: 'italic' }}>{leak.proposedFix}</div>
                           <TextButton onClick={() => createLeakTicket(leak)} disabled={ticketedLeaks[leak.detectedAt] !== undefined} style={{ marginTop: 4, '--md-text-button-container-height': '28px' }}>
@@ -682,7 +682,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                       itself tells the story of what was found and how it was closed. */}
                   {archivedLeaks.length > 0 && (
                     <div>
-                      <button onClick={() => setAiSectOpen(s => ({ ...s, archived: !s.archived }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: NC_TYPE.small, fontWeight: 700, color: C.success, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
+                      <button onClick={() => setAiSectOpen(s => ({ ...s, archived: !s.archived }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color: C.success, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
                         <span style={{ flex: 1 }}>Fixed leaks — archived ({archivedLeaks.length})</span>
                         {suiteIcon(aiSectOpen.archived ? 'expand_less' : 'expand_more', 14)}
                       </button>
@@ -690,19 +690,19 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                         <div key={i} style={{ padding: '6px 12px 10px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <span style={{ color: C.success, display: 'inline-flex' }}>{suiteIcon('check_circle', 13)}</span>
-                            <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600 }}>{leak.jobId}</span>
+                            <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-semibold, 600)` }}>{leak.jobId}</span>
                           </div>
                           <div style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 2 }}>{leak.reason}</div>
                           {leakFixState[leak.detectedAt]?.fixNote && (
                             <div style={{ marginTop: 4, padding: '5px 7px', background: C.bgSoft, borderLeft: `2px solid ${C.success}`, borderRadius: RADIUS.xs, fontSize: NC_TYPE.small, lineHeight: 1.45, color: C.muted, fontFamily: NC_FONT_STACK, maxHeight: 130, overflowY: 'auto' }}>
-                              <span style={{ fontWeight: 700, color: C.success }}>Fix: </span>{leakFixState[leak.detectedAt].fixNote}
+                              <span style={{ fontWeight: `var(--nc-fw-strong, 700)`, color: C.success }}>Fix: </span>{leakFixState[leak.detectedAt].fixNote}
                             </div>
                           )}
                         </div>
                       ))}
                     </div>
                   )}
-                  <button onClick={() => setAiSectOpen(s => ({ ...s, fallovers: !s.fallovers }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
+                  <button onClick={() => setAiSectOpen(s => ({ ...s, fallovers: !s.fallovers }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
                     <span style={{ flex: 1 }}>Recent lane switches{laneSwitches.length ? ` (${laneSwitches.length})` : ''}</span>
                     {suiteIcon(aiSectOpen.fallovers ? 'expand_less' : 'expand_more', 14)}
                   </button>
@@ -726,7 +726,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                         <div key={i} style={{ padding: '7px 12px', borderTop: `1px solid ${C.divider}`, borderLeft: `3px solid ${tone}` }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <span style={{ color: tone, display: 'inline-flex' }}>{suiteIcon(isOrigin ? 'schedule' : isPrimary ? 'undo' : 'warning', 13)}</span>
-                            <span style={{ fontSize: NC_TYPE.meta, color: tone, fontFamily: NC_FONT_STACK, fontWeight: 700 }}>
+                            <span style={{ fontSize: NC_TYPE.meta, color: tone, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-strong, 700)` }}>
                               {isOrigin
                                 ? `Earliest record — on ${event.label}`
                                 : `${isPrimary ? 'Recovered' : 'Fell over'}: ${prior.label} → ${event.label}`}
@@ -745,7 +745,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                       model, tokens and cost; expanded shows the real text sent and
                       returned, with an explicit note when it was truncated. */}
                   <div style={{ display: 'flex', alignItems: 'center', borderTop: `1px solid ${C.divider}` }}>
-                    <button onClick={() => setAiSectOpen(s => ({ ...s, livelog: !s.livelog }))} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0 4px 12px', fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
+                    <button onClick={() => setAiSectOpen(s => ({ ...s, livelog: !s.livelog }))} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0 4px 12px', fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
                       <span style={{ flex: 1 }}>Live log{aiLog.length ? ` (${aiLog.length})` : ''}</span>
                       {suiteIcon(aiSectOpen.livelog ? 'expand_less' : 'expand_more', 14)}
                     </button>
@@ -765,7 +765,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                       return (
                         <div key={entry.at || i} style={{ borderTop: `1px solid ${C.divider}` }}>
                           <button onClick={() => setExpandedLogEntry(open ? null : entry.at)} style={{ display: 'block', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '7px 12px', textAlign: 'left' }}>
-                            <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.job}</div>
+                            <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-semibold, 600)`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.job}</div>
                             <div style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>
                               {new Date(entry.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}
                               {` · ${entry.inTok}→${entry.outTok} tok`}
@@ -790,7 +790,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                                 { label: 'Response', body: entry.response, truncated: entry.responseTruncated, chars: entry.responseChars },
                               ].map(part => (
                                 <div key={part.label} style={{ marginTop: 6 }}>
-                                  <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: NC_FONT_STACK }}>
+                                  <div style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color: C.faint, letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: NC_FONT_STACK }}>
                                     {part.label}{part.truncated ? ` — showing first ${part.body.length} of ${part.chars} chars` : ''}
                                   </div>
                                   <pre style={{ margin: '3px 0 0', padding: 7, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, fontSize: NC_TYPE.small, lineHeight: 1.45, color: C.muted, fontFamily: NC_MONO_STACK, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 220, overflowY: 'auto' }}>{part.body || '(empty)'}</pre>
@@ -821,7 +821,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                 'maxHeight': '88vh',
               }}
             >
-              <div slot="headline" style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title, fontWeight: 600, color: C.text }}>
+              <div slot="headline" style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.text }}>
                 <span style={{ color: C.accent, display: 'inline-flex' }}>{suiteIcon('bolt', 20)}</span>
                 <span style={{ flex: 1 }}>AI live log{aiLog.length ? ` — last ${aiLog.length} calls` : ''}</span>
               </div>
@@ -832,7 +832,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                   aiLog.map((entry, i) => (
                     <div key={entry.at || i} style={{ padding: '12px 0', borderTop: i === 0 ? 'none' : `1px solid ${C.divider}` }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: NC_TYPE.body, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 700 }}>{entry.job}</span>
+                        <span style={{ fontSize: NC_TYPE.body, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-strong, 700)` }}>{entry.job}</span>
                         <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK }}>
                           {new Date(entry.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}
                           {` · ${entry.inTok}→${entry.outTok} tok`}
@@ -848,7 +848,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                         { label: 'Response', body: entry.response, truncated: entry.responseTruncated, chars: entry.responseChars },
                       ].map(part => (
                         <div key={part.label} style={{ marginTop: 8 }}>
-                          <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: NC_FONT_STACK }}>
+                          <div style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color: C.faint, letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: NC_FONT_STACK }}>
                             {part.label}{part.truncated ? ` — showing first ${part.body.length} of ${part.chars} chars` : ''}
                           </div>
                           <pre style={{ margin: '4px 0 0', padding: 10, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, fontSize: NC_TYPE.meta, lineHeight: 1.55, color: C.muted, fontFamily: NC_MONO_STACK, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 340, overflowY: 'auto' }}>{part.body || '(empty)'}</pre>
@@ -875,7 +875,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
             <span style={{
               position: "absolute", top: -4, right: -6, minWidth: 14, height: 14, padding: "0 3px",
               borderRadius: RADIUS.pill, background: C.danger, color: "#fff",
-              fontSize: NC_TYPE.small, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
+              fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
             }}>{bugLogCount}</span>
           )}
         </span>
@@ -993,7 +993,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
         overflow: "hidden", flexShrink: 0, padding: displayOpen ? 0 : "6px 2px",
         boxSizing: "border-box",
       }}>
-        <span style={{ fontSize: displayOpen ? Math.max(13, px(18)) : Math.max(10, px(12)), fontWeight: 600, lineHeight: 1.1, whiteSpace: "nowrap" }}>{railTime}</span>
+        <span style={{ fontSize: displayOpen ? Math.max(13, px(18)) : Math.max(10, px(12)), fontWeight: `var(--nc-fw-semibold, 600)`, lineHeight: 1.1, whiteSpace: "nowrap" }}>{railTime}</span>
         {s > 0.55 && <span style={{ fontSize: displayOpen ? NC_TYPE.small : 9, color: C.muted, marginTop: displayOpen ? 3 : 2, lineHeight: 1, whiteSpace: "nowrap" }}>{railDate}</span>}
         {hebrewDate && s > 0.55 && <span style={{ fontSize: NC_TYPE.small, color: C.faint, marginTop: 2, lineHeight: 1, whiteSpace: "nowrap", direction: "rtl" }}>{hebrewDate}</span>}
       </div>
@@ -1016,7 +1016,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
         borderTop: `1px solid ${C.divider}`,
         display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
       }}>
-        <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, letterSpacing: displayOpen ? 1.4 : 0.4, color: C.faint, fontFamily: NC_FONT_STACK, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>v{APP_VERSION}</span>
+        <span style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, letterSpacing: displayOpen ? 1.4 : 0.4, color: C.faint, fontFamily: NC_FONT_STACK, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>v{APP_VERSION}</span>
         {displayOpen ? (
           <span style={{ fontSize: NC_TYPE.small, color: C.faint, opacity: 0.7, fontFamily: NC_FONT_STACK, letterSpacing: 0.2, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{formatVersionStamp()}</span>
         ) : (() => {

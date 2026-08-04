@@ -51,11 +51,11 @@ function HRLine({ series, color, height = 38 }) {
 function MetricSection({ label, rows, C }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-      <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>{label}</span>
+      <span style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>{label}</span>
       {rows.map(([period, val], i) => (
         <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
           <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, minWidth: 10, lineHeight: 1.5 }}>{period}</span>
-          <span style={{ fontSize: NC_TYPE.meta, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? C.text : C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.4, whiteSpace: "nowrap" }}>{val}</span>
+          <span style={{ fontSize: NC_TYPE.meta, fontWeight: i === 0 ? `var(--nc-fw-semibold, 600)` : `var(--nc-fw-normal, 400)`, color: i === 0 ? C.text : C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.4, whiteSpace: "nowrap" }}>{val}</span>
         </div>
       ))}
     </div>
@@ -118,7 +118,7 @@ export function HealthCard({
 
         {/* Label + status */}
         <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 56, flexShrink: 0, paddingRight: 14, borderRight: `1px solid ${C.divider}`, marginRight: 14, paddingTop: 2 }}>
-          <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Health</span>
+          <span style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Health</span>
           <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: connected ? "#34A853" : C.faint, flexShrink: 0 }} />
             <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1.3 }}>
@@ -127,7 +127,7 @@ export function HealthCard({
           </div>
           <button
             onClick={onOpenHealth}
-            style={{ marginTop: 4, fontSize: NC_TYPE.small, color: C.muted, background: "none", border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, padding: "2px 7px", cursor: "pointer", fontFamily: NC_FONT_STACK, fontWeight: 500, whiteSpace: "nowrap", lineHeight: 1.4 }}
+            style={{ marginTop: 4, fontSize: NC_TYPE.small, color: C.muted, background: "none", border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, padding: "2px 7px", cursor: "pointer", fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-medium, 500)`, whiteSpace: "nowrap", lineHeight: 1.4 }}
           >
             Open ↗
           </button>
@@ -171,7 +171,7 @@ export function HealthCard({
 
         {/* Heart Rate — line graph */}
         <div style={{ flex: 1.4, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
-          <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>
+          <span style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>
             Pulse{hrNow != null ? ` · ${hrNow} bpm` : ""}
           </span>
           <div style={{ marginTop: 2 }}>

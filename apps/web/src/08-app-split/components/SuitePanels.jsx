@@ -15,7 +15,7 @@ function SuiteShailosPanel({ T, action, onClose, sidebarW = 0, user = null, onRe
         <div style={{ display: "flex", alignItems: "center", gap: SP.sm, minWidth: 0 }}>
           {suiteIcon("question_mark", ICON.xl)}
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK }}>Shailos Tracker</div>
+            <div style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text, fontFamily: NC_FONT_STACK }}>Shailos Tracker</div>
             <div style={{ fontSize: NC_TYPE.body, color: C.faint, fontFamily: NC_FONT_STACK }}>Questions, answers, and follow-up</div>
           </div>
         </div>
@@ -143,7 +143,7 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch,
         <div style={{ display: "flex", alignItems: "center", gap: SP.sm, minWidth: 0 }}>
           {suiteIcon("smartphone", ICON.xl)}
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK }}>Phone</div>
+            <div style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text, fontFamily: NC_FONT_STACK }}>Phone</div>
             <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>{status ? `${status.build || "DeskPhone"} - ${status.hfp || "Phone"} - ${status.map || "Messages"}` : "Waiting for DeskPhone"}</div>
           </div>
         </div>
@@ -161,7 +161,7 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch,
       </div>
       <div ref={stageRef} style={{ position: "relative", minHeight: 0, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, background: C.bg, boxShadow: ELEV[3], overflow: "auto", padding: "clamp(16px,2.4vw,28px)", boxSizing: "border-box", display: "grid", gridTemplateColumns: "minmax(280px,420px) minmax(320px,1fr)", gap: SP.lg, alignItems: "start" }}>
         <div style={{ display: "grid", gap: SP.md }}>
-          <div style={{ fontSize: 22, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, display: "flex", alignItems: "center", gap: SP.sm }}>{suiteIcon("phone_in_talk", 28)} Phone</div>
+          <div style={{ fontSize: 22, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text, fontFamily: NC_FONT_STACK, display: "flex", alignItems: "center", gap: SP.sm }}>{suiteIcon("phone_in_talk", 28)} Phone</div>
           {error && <div style={{ fontSize: NC_TYPE.body, lineHeight: 1.45, color: C.danger, background: `${C.danger}18`, border: `1px solid ${C.danger}40`, borderRadius: RADIUS.md, padding: SP.sm }}>{error}</div>}
           <div style={{ display: "grid", gap: SP.sm }}>
             <ActionBtn variant="filled" icon="desktop_windows" iconSize={ICON.lg} height={44} containerColor={C.accent} labelColor="#fff"

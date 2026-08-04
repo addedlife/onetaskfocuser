@@ -59,7 +59,7 @@ export function CountPill({ children, color, C, tone = 'soft' }) {
         minWidth: 20, height: 20, padding: '0 7px',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: RADIUS.pill,
-        fontFamily: FONT, fontSize: NC_TYPE.small, fontWeight: 700, lineHeight: 1,
+        fontFamily: FONT, fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, lineHeight: 1,
         background: solid ? (color || C.accent) : tonal(color || C.muted, 0.16),
         color: solid ? '#fff' : (color || C.muted),
       }}
@@ -103,7 +103,7 @@ export function Card({
           <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, minWidth: 0, flex: 1 }}>
             {title && (
               <h2 style={{
-                margin: 0, fontFamily: FONT, fontSize: NC_TYPE.title, fontWeight: 650,
+                margin: 0, fontFamily: FONT, fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-semibold, 650)`,
                 letterSpacing: '-0.01em', color: C.text,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>{title}</h2>

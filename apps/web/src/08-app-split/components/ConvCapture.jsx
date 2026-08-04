@@ -577,7 +577,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: `${SP.xl} ${SP.xl} ${SP.lg}`, borderBottom: `1px solid ${C.divider}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP.md }}>
-            <span style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>Record anything</span>
+            <span style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text }}>Record anything</span>
             <CloseBtn />
           </div>
           <div style={{ fontSize: NC_TYPE.body, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.55 }}>
@@ -588,19 +588,19 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         <List style={{ padding: `${SP.lg} ${SP.xl}`, display: 'flex', flexDirection: 'column', gap: SP.md, background: 'none' }}>
           <ListItem type="button" onClick={startMicCapture} style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, fontFamily: NC_FONT_STACK }}>
             <span slot="start" style={{ fontSize: 22 }}>🎤</span>
-            <div slot="headline" style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>My microphone</div>
+            <div slot="headline" style={{ fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text }}>My microphone</div>
             <div slot="supporting-text" style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Record what you say out loud</div>
           </ListItem>
           {feedInfo?.available && (
             <ListItem type="button" onClick={startFeedCapture} style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, fontFamily: NC_FONT_STACK }}>
               <span slot="start" style={{ fontSize: 22 }}>📞</span>
-              <div slot="headline" style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>Live call feed (PC link)</div>
+              <div slot="headline" style={{ fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text }}>Live call feed (PC link)</div>
               <div slot="supporting-text" style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Record the phone call straight from the DeskPhone bridge — no dialogs</div>
             </ListItem>
           )}
           <ListItem type="button" onClick={startCallCapture} style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, fontFamily: NC_FONT_STACK }}>
             <span slot="start" style={{ fontSize: 22 }}>🔊</span>
-            <div slot="headline" style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>Another screen's audio</div>
+            <div slot="headline" style={{ fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text }}>Another screen's audio</div>
             <div slot="supporting-text" style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Capture a tab/window/app's sound — check "Share audio" in the dialog</div>
           </ListItem>
         </List>
@@ -616,7 +616,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: `${SP.xl} ${SP.xl} ${SP.lg}`, borderBottom: `1px solid ${C.divider}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP.md }}>
-            <span style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>Capture Call Audio</span>
+            <span style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text }}>Capture Call Audio</span>
             <CloseBtn />
           </div>
           {feedInfo?.available ? (
@@ -669,7 +669,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       <div style={{ position: 'fixed', right: 16, bottom: 76, zIndex: 9300, display: 'flex', alignItems: 'center', gap: SP.sm, background: C.bg, border: `1.5px solid ${isRec ? C.danger : C.divider}`, borderRadius: RADIUS.pill, boxShadow: ELEV[4], padding: `${SP.sm} ${SP.md}`, fontFamily: NC_FONT_STACK }}>
         <style>{`@keyframes conv-pulse{0%,100%{opacity:1}50%{opacity:.25}}`}</style>
         <div style={{ width: 10, height: 10, borderRadius: RADIUS.pill, background: isRec ? C.danger : C.warning, animation: 'conv-pulse 1.4s ease infinite', flexShrink: 0 }}/>
-        <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontVariantNumeric: 'tabular-nums', fontWeight: 500, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontVariantNumeric: 'tabular-nums', fontWeight: `var(--nc-fw-medium, 500)`, whiteSpace: 'nowrap' }}>
           {isRec ? fmtElapsed : (procNote || 'Processing…')}
         </span>
         {isRec && (
@@ -686,7 +686,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       <div style={overlayS}>
         <div style={{ ...cardS, alignItems: 'center', justifyContent: 'center', padding: `56px ${SP.xl}`, textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: SP.lg }}>🎙️</div>
-          <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text, marginBottom: SP.sm, fontFamily: NC_FONT_STACK }}>Processing conversation…</div>
+          <div style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text, marginBottom: SP.sm, fontFamily: NC_FONT_STACK }}>Processing conversation…</div>
           <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>{procNote || 'Transcribing and extracting items'}</div>
           <ActionBtn variant="text" labelColor={C.faint} labelSize={NC_TYPE.meta} onClick={() => setMinimized(true)} style={{ marginTop: SP.lg }}>
             Keep working — minimize
@@ -701,7 +701,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         <div style={cardS} onClick={e => e.stopPropagation()}>
           <div style={{ padding: `${SP.xl} ${SP.xl} ${SP.lg}`, borderBottom: `1px solid ${C.divider}` }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP.md }}>
-              <span style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>{source === 'pclink' ? 'Recording Live Call Feed' : source === 'system' ? 'Capturing Screen Audio' : 'Recording Conversation'}</span>
+              <span style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text }}>{source === 'pclink' ? 'Recording Live Call Feed' : source === 'system' ? 'Capturing Screen Audio' : 'Recording Conversation'}</span>
               <div style={{ display: 'flex', gap: SP.xs }}>
                 <IconBtn icon="close_fullscreen" iconSize={ICON.md} onClick={() => setMinimized(true)} aria-label="Minimize to floating pill" />
                 <IconBtn icon="close" iconSize={ICON.md} onClick={cancelRecording} aria-label="Discard recording" />
@@ -746,7 +746,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         <div style={{ padding: `${SP.lg} ${SP.xl} ${SP.md}`, borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>Found in this conversation</div>
+              <div style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text }}>Found in this conversation</div>
               <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 3 }}>
                 {items.length} item{items.length !== 1 ? 's' : ''} — check what to add
               </div>
@@ -770,8 +770,8 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
               <div key={cat} style={{ marginBottom: SP.lg }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, marginBottom: SP.sm }}>
                   <div style={{ width: 3, height: 18, background: color, borderRadius: 2, flexShrink: 0 }}/>
-                  <span style={{ fontSize: NC_TYPE.meta, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK }}>{label}</span>
-                  <span style={{ fontSize: NC_TYPE.small, background: color + '22', color, borderRadius: RADIUS.pill, padding: '1px 7px', fontFamily: NC_FONT_STACK, fontWeight: 500 }}>{sItems.length}</span>
+                  <span style={{ fontSize: NC_TYPE.meta, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text, fontFamily: NC_FONT_STACK }}>{label}</span>
+                  <span style={{ fontSize: NC_TYPE.small, background: color + '22', color, borderRadius: RADIUS.pill, padding: '1px 7px', fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-medium, 500)` }}>{sItems.length}</span>
                 </div>
                 {sItems.map(it => (
                   <div key={it.id} style={{ display: 'flex', alignItems: 'flex-start', gap: SP.sm, padding: '7px 0', borderBottom: `1px solid ${C.divider}` }}>

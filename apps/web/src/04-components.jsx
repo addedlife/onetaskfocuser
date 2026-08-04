@@ -58,7 +58,7 @@ function AutoFitText({text, minSize=16, maxSize=56, color="#fff", style={}}) {
            : Math.max(minSize, maxSize * 0.42);
   return <div style={{
     fontSize: fs,
-    fontWeight: 400,
+    fontWeight: `var(--nc-fw-normal, 400)`,
     color,
     lineHeight: 1.3,
     margin: 0,
@@ -78,14 +78,14 @@ function Toast({message, color, onDismiss}) {
     <div style={{
       position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
       background: color || "#333", color: "#fff", borderRadius: RADIUS.sm,
-      padding: "9px 12px 9px 18px", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 600,
+      padding: "9px 12px 9px 18px", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-semibold, 600)`,
       zIndex: 99999, animation: "ot-fade 0.3s ease", pointerEvents: "auto",
       boxShadow: "0 4px 20px rgba(0,0,0,0.25)", whiteSpace: "nowrap",
       display: "flex", alignItems: "center", gap: 10
     }}>
       <span>{message}</span>
       {onDismiss && (
-        <button onClick={onDismiss} style={{background:"none",border:"none",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:NC_TYPE.title,padding:"0 2px",lineHeight:1,flexShrink:0,fontWeight:400}}>✕</button>
+        <button onClick={onDismiss} style={{background:"none",border:"none",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:NC_TYPE.title,padding:"0 2px",lineHeight:1,flexShrink:0,fontWeight:`var(--nc-fw-normal, 400)`}}>✕</button>
       )}
     </div>
   );
@@ -99,7 +99,7 @@ function AgeBadge({task, pris, thresholds, T}) {
   const label = days >= 1 ? `${days}d` : `${hours}h`;
   return <span title={`${hours}h old`} style={{
     display: "inline-flex", alignItems: "center", gap:SP.xs,
-    fontSize:NC_TYPE.small, color: "#B85030", fontFamily: NC_FONT_STACK, fontWeight: 700,
+    fontSize:NC_TYPE.small, color: "#B85030", fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-strong, 700)`,
     animation: "ot-age-pulse 2s ease-in-out infinite", flexShrink: 0
   }}>
     <IC.Clock s={9} c="#B85030"/>{label}
@@ -111,7 +111,7 @@ function EnergyBadge({energy, T}) {
   if (!energy) return null;
   const isHigh = energy === "high";
   return <span style={{
-    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 700,
+    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-strong, 700)`,
     color: isHigh ? "#B85030" : "#4A7898",
     border: `1px solid ${isHigh ? "#B85030" : "#4A7898"}`,
     borderRadius: RADIUS.pill, padding: "0 6px", flexShrink: 0
@@ -132,7 +132,7 @@ function ContextBadges({tags, T}) {
   return <span style={{display:"inline-flex",gap:SP.xs,flexShrink:0,flexWrap:"wrap"}}>
     {tags.map(tag => (
       <span key={tag} style={{
-        fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 600,
+        fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-semibold, 600)`,
         background: CTX_TAG_COLORS[tag] + "40", color: CTX_TAG_TEXT[tag] || priText(CTX_TAG_COLORS[tag] || "#666"),
         borderRadius: RADIUS.pill, padding: "0 6px"
       }}>{tag}</span>
@@ -143,7 +143,7 @@ function ContextBadges({tags, T}) {
 // Mrs W badge
 function MrsWBadge({T}) {
   return <span style={{
-    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 700,
+    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-strong, 700)`,
     background: "#D4A0D840", color: "#7A3A7E",
     border: "1px solid #D4A0D8", borderRadius: RADIUS.pill, padding: "0 6px", flexShrink: 0
   }}>Mrs. W</span>;
@@ -158,7 +158,7 @@ function BlockedBadge({task, T}) {
     ageLabel = hrs < 1 ? " <1h" : hrs < 24 ? ` ${hrs}h` : ` ${Math.floor(hrs/24)}d`;
   }
   return <span title={task.blockedNote ? `Blocked: ${task.blockedNote}` : "blocked"} style={{
-    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 700,
+    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-strong, 700)`,
     background: "#E0B47240", color: "#8A5A10",
     borderRadius: RADIUS.pill, padding: "0 6px", flexShrink: 0
   }}>⏸ blocked{ageLabel}</span>;
@@ -168,7 +168,7 @@ function BlockedBadge({task, T}) {
 function GoodEnoughBadge({task}) {
   if (!task.goodEnough) return null;
   return <span title="Good enough completion" style={{
-    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 700,
+    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: `var(--nc-fw-strong, 700)`,
     background: "#9BD4A040", color: "#3A7242",
     borderRadius: RADIUS.pill, padding: "0 6px", flexShrink: 0
   }}>≈ good enough</span>;
@@ -329,14 +329,14 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       >
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"clamp(16px,3vh,28px)",animation:"ot-reveal 2.5s ease 0.3s both"}}>
           <div style={{fontSize:"clamp(80px,18vw,140px)",lineHeight:1}}>🕯️🕯️</div>
-          <p style={{margin:0,fontSize:"clamp(15px,2.5vw,20px)",fontFamily:NC_FONT_STACK,fontStyle:"italic",fontWeight:400,color:"rgba(255,255,255,0.35)",letterSpacing:"0.05em",textAlign:"center"}}>
+          <p style={{margin:0,fontSize:"clamp(15px,2.5vw,20px)",fontFamily:NC_FONT_STACK,fontStyle:"italic",fontWeight:`var(--nc-fw-normal, 400)`,color:"rgba(255,255,255,0.35)",letterSpacing:"0.05em",textAlign:"center"}}>
             All you have to do now is…
           </p>
-          <p style={{margin:0,fontSize:"clamp(28px,5vw,44px)",fontFamily:NC_FONT_STACK,fontWeight:400,color:"rgba(255,255,255,0.7)",letterSpacing:"0.04em",textAlign:"center"}}>
+          <p style={{margin:0,fontSize:"clamp(28px,5vw,44px)",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-normal, 400)`,color:"rgba(255,255,255,0.7)",letterSpacing:"0.04em",textAlign:"center"}}>
             enjoy Shabbos
           </p>
           {sHrs != null && shabbosMs > 0 && (
-            <p style={{margin:0,marginTop:8,fontSize:"clamp(13px,2vw,17px)",fontFamily:NC_FONT_STACK,fontWeight:300,color:"rgba(255,255,255,0.2)",letterSpacing:2}}>
+            <p style={{margin:0,marginTop:8,fontSize:"clamp(13px,2vw,17px)",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-light, 300)`,color:"rgba(255,255,255,0.2)",letterSpacing:2}}>
               {sHrs}h {sMins}m
             </p>
           )}
@@ -348,7 +348,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
             onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.12)"}
           >
             <span style={{fontSize:NC_TYPE.title}}>🎙️</span>
-            <span style={{fontSize:"clamp(12px,1.8vw,15px)",fontFamily:NC_FONT_STACK,fontWeight:300,color:"rgba(255,255,255,0.35)",letterSpacing:"0.03em"}}>Record Shaila</span>
+            <span style={{fontSize:"clamp(12px,1.8vw,15px)",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-light, 300)`,color:"rgba(255,255,255,0.35)",letterSpacing:"0.03em"}}>Record Shaila</span>
           </button>
         </div>
       </div>
@@ -366,7 +366,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       <div style={{position:"absolute",inset:0,zIndex:1}} onTouchStart={resetFade}/>
       {/* Clock — always visible */}
       <div style={{position:"absolute",top:"clamp(18px,3vh,32px)",left:"50%",transform:"translateX(-50%)",zIndex:10,pointerEvents:"none"}}>
-        <span style={{fontSize:"clamp(22px,4vw,34px)",fontFamily:NC_FONT_STACK,fontWeight:300,color:"rgba(255,255,255,0.55)",letterSpacing:2}}>
+        <span style={{fontSize:"clamp(22px,4vw,34px)",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-light, 300)`,color:"rgba(255,255,255,0.55)",letterSpacing:2}}>
           {zenClock.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
         </span>
       </div>
@@ -386,7 +386,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       {(()=>{const zenColor=p.isShaila?"#2ECC71":p.color; return (
       <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",gap:"clamp(14px,2.5vh,24px)"}}>
         {/* Calming title above card */}
-        <p style={{margin:0,fontSize:"clamp(14px,2.2vw,19px)",fontFamily:NC_FONT_STACK,fontStyle:"italic",fontWeight:400,color:"rgba(255,255,255,0.42)",letterSpacing:"0.05em",textAlign:"center",animation:"ot-reveal 1.4s ease 0.15s both",pointerEvents:"none"}}>
+        <p style={{margin:0,fontSize:"clamp(14px,2.2vw,19px)",fontFamily:NC_FONT_STACK,fontStyle:"italic",fontWeight:`var(--nc-fw-normal, 400)`,color:"rgba(255,255,255,0.42)",letterSpacing:"0.05em",textAlign:"center",animation:"ot-reveal 1.4s ease 0.15s both",pointerEvents:"none"}}>
           All you have to do now is…
         </p>
         {/* Task card */}
@@ -420,12 +420,12 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       {/* Minimized pills in zen */}
       {jsMinimized && justStartId === curTaskId && (
         <div onClick={e=>{e.stopPropagation();onRestoreJs?.();}} style={{position:"absolute",bottom:70,left:"50%",transform:"translateX(-50%)",zIndex:10,background:gP(pris,task.priority).color,borderRadius:RADIUS.pill,padding:"5px 12px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",opacity:showUI?1:0.2,transition:"opacity 0.5s"}}>
-          <IC.Timer s={11} c="#fff"/><span style={{fontSize:NC_TYPE.small,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:700}}>Just Start</span>
+          <IC.Timer s={11} c="#fff"/><span style={{fontSize:NC_TYPE.small,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`}}>Just Start</span>
         </div>
       )}
       {bdMinimized && showBodyDouble && (
         <div onClick={e=>{e.stopPropagation();onRestoreBd?.();}} style={{position:"absolute",bottom:40,left:"50%",transform:"translateX(-50%)",zIndex:10,background:"#3A7098",borderRadius:RADIUS.pill,padding:"5px 12px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",opacity:showUI?1:0.2,transition:"opacity 0.5s"}}>
-          <IC.Timer s={11} c="#fff"/><span style={{fontSize:NC_TYPE.small,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:700}}>Body Double</span>
+          <IC.Timer s={11} c="#fff"/><span style={{fontSize:NC_TYPE.small,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`}}>Body Double</span>
         </div>
       )}
 
@@ -477,7 +477,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
                 style={{background:active?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${active?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:RADIUS.pill,padding:`5px ${showLabel?"12px":"8px"} 5px 8px`,display:"flex",alignItems:"center",gap:0,cursor:"pointer",overflow:"hidden",transition:"opacity 0.5s, background 0.3s, border-color 0.3s, padding 0.4s cubic-bezier(0.4,0,0.2,1)",opacity:showUI?(active?0.9:0.55):(active?0.35:0.08)}}
               >
                 {active ? <IC.Pause s={11} c="rgba(255,255,255,0.85)"/> : <IC.Play s={11} c="rgba(255,255,255,0.75)"/>}
-                <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap",overflow:"hidden",pointerEvents:"none",maxWidth:showLabel?"160px":"0px",paddingLeft:showLabel?"6px":"0px",opacity:showLabel?1:0,transform:showLabel?"translateX(0)":"translateX(8px)",transition:"max-width 0.4s cubic-bezier(0.4,0,0.2,1), padding-left 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease, transform 0.4s cubic-bezier(0.4,0,0.2,1)"}}>{label}</span>
+                <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap",overflow:"hidden",pointerEvents:"none",maxWidth:showLabel?"160px":"0px",paddingLeft:showLabel?"6px":"0px",opacity:showLabel?1:0,transform:showLabel?"translateX(0)":"translateX(8px)",transition:"max-width 0.4s cubic-bezier(0.4,0,0.2,1), padding-left 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease, transform 0.4s cubic-bezier(0.4,0,0.2,1)"}}>{label}</span>
               </div>
               {/* Seek/progress bar — only the active track, only while the UI is awake (fades out with the idle dark) */}
               {active && (
@@ -517,7 +517,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       {showDump && (
         <div style={{position:"absolute",inset:0,zIndex:30,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.6)"}} onClick={e=>e.stopPropagation()}>
           <div style={{width:"min(90vw,540px)",display:"flex",flexDirection:"column",gap:10}} onClick={e=>e.stopPropagation()}>
-            <p style={{margin:0,textAlign:"center",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:700,color:"rgba(255,255,255,0.4)",letterSpacing:"0.12em",textTransform:"uppercase"}}>Brain Dump</p>
+            <p style={{margin:0,textAlign:"center",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`,color:"rgba(255,255,255,0.4)",letterSpacing:"0.12em",textTransform:"uppercase"}}>Brain Dump</p>
             {dumpConfirmed
               ? <div style={{textAlign:"center",fontSize:28,color:"rgba(255,255,255,0.9)",fontFamily:NC_FONT_STACK,animation:"ot-fade 0.3s",padding:"24px 0"}}>✓ Captured</div>
               : <textarea
@@ -578,7 +578,7 @@ function ZenDumpReview({tasks, pris, T, onSubmit, onDismiss, parsing}) {
       <div style={{width:"min(92vw,540px)",maxHeight:"80vh",display:"flex",flexDirection:"column",background:T.card,borderRadius:RADIUS.md,border:`1px solid ${T.brd}`,boxShadow:ELEV[4],overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
         {/* Header */}
         <div style={{padding:"16px 20px 12px",borderBottom:`1px solid ${T.brd}`}}>
-          <p style={{margin:0,fontSize:NC_TYPE.body,fontWeight:700,fontFamily:NC_FONT_STACK,color:T.text}}>Brain Dump Review</p>
+          <p style={{margin:0,fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-strong, 700)`,fontFamily:NC_FONT_STACK,color:T.text}}>Brain Dump Review</p>
           <p style={{margin:"3px 0 0",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:T.tSoft}}>
             {parsing ? "AI is still parsing..." : `${counts.tasks} task${counts.tasks===1?"":"s"} and ${counts.schedule} event${counts.schedule===1?"":"s"} captured`}
           </p>
@@ -623,7 +623,7 @@ function ZenDumpReview({tasks, pris, T, onSubmit, onDismiss, parsing}) {
 }
 
 function TabBtn({active, onClick, icon, label, T}) {
-  return <button onClick={onClick} style={{flex:1,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px 6px",border:"none",borderRadius:RADIUS.sm,background:active?T.card:"transparent",boxShadow:active?"0 2px 12px rgba(0,0,0,0.06)":"none",color:active?T.text:T.tSoft,fontSize:NC_TYPE.small,fontWeight:active?600:400,cursor:"pointer",fontFamily:NC_FONT_STACK,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",whiteSpace:"nowrap"}}>{icon}{label}</button>;
+  return <button onClick={onClick} style={{flex:1,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px 6px",border:"none",borderRadius:RADIUS.sm,background:active?T.card:"transparent",boxShadow:active?"0 2px 12px rgba(0,0,0,0.06)":"none",color:active?T.text:T.tSoft,fontSize:NC_TYPE.small,fontWeight:active?`var(--nc-fw-semibold, 600)`:`var(--nc-fw-normal, 400)`,cursor:"pointer",fontFamily:NC_FONT_STACK,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",whiteSpace:"nowrap"}}>{icon}{label}</button>;
 }
 
 function PriEditor({T, onAdd, onClose}) {
@@ -677,7 +677,7 @@ function JustStartTimer({color, T, onDone, onMinimize}) {
         </text>
       </svg>
       <div>
-        <p style={{fontSize:NC_TYPE.meta,fontWeight:700,color,margin:0,fontFamily:NC_FONT_STACK}}>Just start — 2 minutes</p>
+        <p style={{fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-strong, 700)`,color,margin:0,fontFamily:NC_FONT_STACK}}>Just start — 2 minutes</p>
         <p style={{fontSize:NC_TYPE.small,color:T.tSoft,margin:0,fontFamily:NC_FONT_STACK}}>{secs > 0 ? "You only have to do this long." : "Great start! Keep going 🎉"}</p>
       </div>
       <div style={{marginLeft:"auto",display:"flex",flexDirection:"column",gap:SP.xs}}>
@@ -722,7 +722,7 @@ function BodyDoubleTimer({T, minimized, onMinimize, onRestore, onClose}) {
     return (
       <div onClick={onRestore} style={{position:"fixed",bottom:16,left:16,zIndex:9200,background:"#3A7098",borderRadius:RADIUS.pill,padding:"6px 12px",display:"flex",alignItems:"center",gap:SP.sm,cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.25)",animation:"ot-fade 0.2s"}}>
         <IC.Timer s={12} c="#fff"/>
-        {dur && running && <span style={{fontSize:NC_TYPE.small,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:700,letterSpacing:.5}}>{fmt(secs)}</span>}
+        {dur && running && <span style={{fontSize:NC_TYPE.small,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`,letterSpacing:.5}}>{fmt(secs)}</span>}
         <span style={{fontSize:NC_TYPE.small,color:"rgba(255,255,255,0.8)",fontFamily:NC_FONT_STACK}}>Body Double</span>
         <button onClick={e=>{e.stopPropagation();onClose();}} style={{background:"none",border:"none",cursor:"pointer",padding:0,opacity:.7,marginLeft:2,fontSize:NC_TYPE.meta,color:"#fff"}}>✕</button>
       </div>
@@ -734,7 +734,7 @@ function BodyDoubleTimer({T, minimized, onMinimize, onRestore, onClose}) {
       onClick={e=>{if(e.target===e.currentTarget) onMinimize?.();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:RADIUS.md,padding:"28px 24px",maxWidth:340,width:"100%",textAlign:"center",boxShadow:ELEV[4]}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0,display:"flex",alignItems:"center",gap:SP.sm}}><IC.Timer s={16} c={T.text}/>Body Double</h3>
+          <h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0,display:"flex",alignItems:"center",gap:SP.sm}}><IC.Timer s={16} c={T.text}/>Body Double</h3>
           <div style={{display:"flex",gap:6}}>
             <button onClick={onMinimize} style={{background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.title,color:T.tSoft,opacity:.6}} title="Minimize">–</button>
             <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.title,color:T.tSoft}}>✕</button>
@@ -792,7 +792,7 @@ function BrainDump({T, pris, onCapture, onClose}) {
     <div style={{position:"fixed",inset:0,zIndex:8600,background:"rgba(0,0,0,0.48)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:RADIUS.md,padding:"24px 20px",maxWidth:480,width:"90%",maxHeight:"86vh",overflowY:"auto",boxShadow:ELEV[4]}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-          <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0,fontFamily:NC_FONT_STACK,display:"flex",alignItems:"center",gap:SP.sm}}><IC.Brain s={16} c={T.text}/>Brain Dump</h3>
+          <h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0,fontFamily:NC_FONT_STACK,display:"flex",alignItems:"center",gap:SP.sm}}><IC.Brain s={16} c={T.text}/>Brain Dump</h3>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.title,color:T.tSoft}}>✕</button>
         </div>
         <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 14px",lineHeight:1.5}}>
@@ -832,7 +832,7 @@ function OverwhelmBanner({count, threshold, onShowAll, T}) {
     <div style={{background:pBg("#E0B472"),border:"1px solid #E0B47280",borderRadius:RADIUS.md,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
       <span style={{fontSize:18}}>🌊</span>
       <div style={{flex:1}}>
-        <p style={{fontSize:NC_TYPE.meta,fontWeight:700,margin:0,fontFamily:NC_FONT_STACK,color:"#8A6020"}}>Overwhelm mode</p>
+        <p style={{fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-strong, 700)`,margin:0,fontFamily:NC_FONT_STACK,color:"#8A6020"}}>Overwhelm mode</p>
         <p style={{fontSize:NC_TYPE.small,margin:0,fontFamily:NC_FONT_STACK,color:"#8A6020"}}>Showing top 3 of {count}. Just focus on these.</p>
       </div>
       <TextButton onClick={onShowAll} style={{"--md-text-button-label-text-color":"#8A6020"}}>Show all</TextButton>
@@ -901,11 +901,11 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebar
           const isTop = i === 0;
           return (
             <div key={i} style={{position:"absolute",right:i*3,top:i*3,width:50,height:38,borderRadius:RADIUS.sm,background:tp.color,border:"1px solid rgba(0,0,0,0.08)",boxShadow:"0 1px 4px rgba(0,0,0,0.1)",transform:`rotate(${(i-1)*3}deg)`,zIndex:4-i,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",padding:"3px 4px"}}>
-              {isTop && <span style={{fontSize:NC_TYPE.small,color:textOnColor(tp.color),fontFamily:NC_FONT_STACK,fontWeight:500,lineHeight:1.2,textAlign:"center",overflow:"hidden",maxHeight:"100%",wordBreak:"break-word"}}>{recent[0]?.text?.slice(0,24)}{recent[0]?.text?.length>24?"…":""}</span>}
+              {isTop && <span style={{fontSize:NC_TYPE.small,color:textOnColor(tp.color),fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-medium, 500)`,lineHeight:1.2,textAlign:"center",overflow:"hidden",maxHeight:"100%",wordBreak:"break-word"}}>{recent[0]?.text?.slice(0,24)}{recent[0]?.text?.length>24?"…":""}</span>}
             </div>
           );
         })}
-        <span style={{position:"absolute",bottom:-4,left:-4,background:T.text,color:T.bg||"#fff",borderRadius:RADIUS.pill,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:700,padding:"1px 6px",zIndex:10,lineHeight:1.4}}>{tasks.length}</span>
+        <span style={{position:"absolute",bottom:-4,left:-4,background:T.text,color:T.bg||"#fff",borderRadius:RADIUS.pill,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`,padding:"1px 6px",zIndex:10,lineHeight:1.4}}>{tasks.length}</span>
       </button>
 
       {/* View toggle — visible on launchpad below the stacked cards */}
@@ -932,7 +932,7 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebar
           <div onClick={closeFan} style={{position:"fixed",inset:0,zIndex:3500}}/>
           {/* "View all" pill above column */}
           <div style={{position:"fixed",left:btnRect.left - cardW - 14, top:btnRect.top - 36, zIndex:3600, animation:"ot-fan-out 0.3s both"}}>
-            <button onClick={e=>{e.stopPropagation();closeFan();onToggle();}} style={{background:T.card||"#fff",border:`1px solid ${T.brd}`,borderRadius:RADIUS.pill,padding:"5px 14px",cursor:"pointer",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:700,color:T.text,boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>
+            <button onClick={e=>{e.stopPropagation();closeFan();onToggle();}} style={{background:T.card||"#fff",border:`1px solid ${T.brd}`,borderRadius:RADIUS.pill,padding:"5px 14px",cursor:"pointer",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`,color:T.text,boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>
               View all {tasks.length} ✦
             </button>
           </div>
@@ -978,14 +978,14 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebar
                       transition:"transform 0.2s,box-shadow 0.2s",
                       flexShrink:0,
                     }}>
-                    <span style={{fontSize:NC_TYPE.small,lineHeight:1.35,color:T.text,fontFamily:NC_FONT_STACK,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",fontWeight:isSel?500:400}}>
+                    <span style={{fontSize:NC_TYPE.small,lineHeight:1.35,color:T.text,fontFamily:NC_FONT_STACK,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",fontWeight:isSel?`var(--nc-fw-medium, 500)`:`var(--nc-fw-normal, 400)`}}>
                       {task.goodEnough&&<span style={{fontSize:NC_TYPE.small,opacity:.6,marginRight:2}}>≈</span>}
                       {task.text}
                     </span>
                     {isSel ? (
                       <div style={{display:"flex",gap:6,marginTop:5}} onClick={e=>e.stopPropagation()}>
-                        <button onClick={()=>{onClone&&onClone(task);closeFan();}} style={{flex:1,background:p.color+"40",border:"none",borderRadius:RADIUS.xs,padding:"3px 0",cursor:"pointer",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:600}}>↗ Clone</button>
-                        <button onClick={()=>{onUncomp(task.id);closeFan();}} style={{flex:1,background:p.color+"60",border:"none",borderRadius:RADIUS.xs,padding:"3px 0",cursor:"pointer",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:600}}>↩ Undo</button>
+                        <button onClick={()=>{onClone&&onClone(task);closeFan();}} style={{flex:1,background:p.color+"40",border:"none",borderRadius:RADIUS.xs,padding:"3px 0",cursor:"pointer",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:`var(--nc-fw-semibold, 600)`}}>↗ Clone</button>
+                        <button onClick={()=>{onUncomp(task.id);closeFan();}} style={{flex:1,background:p.color+"60",border:"none",borderRadius:RADIUS.xs,padding:"3px 0",cursor:"pointer",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:`var(--nc-fw-semibold, 600)`}}>↩ Undo</button>
                       </div>
                     ) : (
                       <span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,textAlign:"right",marginTop:3}}>
@@ -1007,7 +1007,7 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebar
           <div onClick={e=>e.stopPropagation()} style={{position:"relative",width:"min(460px, 92vw)",height:"100vh",background:T.bg||"#f5f0e8",boxShadow:"-4px 0 24px rgba(0,0,0,0.12)",overflowY:"auto",overflowX:"hidden",padding:"20px 18px 40px",animation:"ot-fade 0.2s",zIndex:1}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,position:"sticky",top:0,background:T.bg||"#f5f0e8",paddingBottom:8,zIndex:5}}>
               <div>
-                <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0,fontFamily:NC_FONT_STACK}}>Completed</h3>
+                <h3 style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,margin:0,fontFamily:NC_FONT_STACK}}>Completed</h3>
                 <p style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0}}>{tasks.length} task{tasks.length!==1?"s":""} conquered</p>
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
@@ -1147,7 +1147,7 @@ function BlockReflectModal({task, T, aiOpts, onClose}) {
       <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:10011,background:T.card,borderRadius:RADIUS.md,padding:"28px 28px 24px",width:"min(480px,92vw)",maxHeight:"85vh",overflowY:"auto",boxShadow:ELEV[4],animation:"ot-reveal 0.25s",fontFamily:NC_FONT_STACK}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
           <div>
-            <h3 style={{margin:"0 0 4px",fontSize:NC_TYPE.title,fontWeight:600,color:T.text}}>What's in the way?</h3>
+            <h3 style={{margin:"0 0 4px",fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,color:T.text}}>What's in the way?</h3>
             <p style={{margin:0,fontSize:NC_TYPE.small,color:T.tFaint,maxWidth:340,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.text}</p>
           </div>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:T.tFaint,padding:"0 0 0 12px",lineHeight:1}}>×</button>
@@ -1162,14 +1162,14 @@ function BlockReflectModal({task, T, aiOpts, onClose}) {
                   onMouseEnter={e=>{e.currentTarget.style.borderColor=T.brdS;e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,0.08)";}}
                   onMouseLeave={e=>{e.currentTarget.style.borderColor=T.brd;e.currentTarget.style.boxShadow="none";}}>
                   <div style={{fontSize:22,marginBottom:6}}>{r.emoji}</div>
-                  <div style={{fontSize:NC_TYPE.meta,fontWeight:600,color:T.text,marginBottom:3}}>{r.label}</div>
+                  <div style={{fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,color:T.text,marginBottom:3}}>{r.label}</div>
                   <div style={{fontSize:NC_TYPE.small,color:T.tFaint,lineHeight:1.4}}>{r.desc}</div>
                 </button>
               ))}
             </div>
 
             <div style={{marginTop:14,borderTop:`1px solid ${T.brd}`,paddingTop:14}}>
-              <p style={{margin:"0 0 8px",fontSize:NC_TYPE.small,color:T.tFaint,fontWeight:500,letterSpacing:.3}}>OR — DESCRIBE IT YOURSELF</p>
+              <p style={{margin:"0 0 8px",fontSize:NC_TYPE.small,color:T.tFaint,fontWeight:`var(--nc-fw-medium, 500)`,letterSpacing:.3}}>OR — DESCRIBE IT YOURSELF</p>
               <textarea
                 value={freeText}
                 onChange={e=>setFreeText(e.target.value)}
@@ -1179,7 +1179,7 @@ function BlockReflectModal({task, T, aiOpts, onClose}) {
                 style={{width:"100%",boxSizing:"border-box",background:T.bg,border:`1px solid ${T.brd}`,borderRadius:RADIUS.md,padding:"10px 12px",fontSize:NC_TYPE.meta,color:T.text,fontFamily:NC_FONT_STACK,resize:"vertical",outline:"none",lineHeight:1.6}}
               />
               <button onClick={submitFreewrite} disabled={!freeText.trim()}
-                style={{marginTop:8,width:"100%",padding:"9px 0",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:600,background:freeText.trim()?T.brdS:"none",color:freeText.trim()?T.card:T.tFaint,border:`1px solid ${freeText.trim()?T.brdS:T.brd}`,borderRadius:RADIUS.sm,cursor:freeText.trim()?"pointer":"default",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",letterSpacing:.3}}>
+                style={{marginTop:8,width:"100%",padding:"9px 0",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,background:freeText.trim()?T.brdS:"none",color:freeText.trim()?T.card:T.tFaint,border:`1px solid ${freeText.trim()?T.brdS:T.brd}`,borderRadius:RADIUS.sm,cursor:freeText.trim()?"pointer":"default",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",letterSpacing:.3}}>
                 ✍️ Analyze this
               </button>
             </div>
@@ -1190,7 +1190,7 @@ function BlockReflectModal({task, T, aiOpts, onClose}) {
           <div>
             <div style={{display:"flex",alignItems:"center",gap:SP.sm,marginBottom:16,padding:"10px 14px",background:T.bg,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`}}>
               <span style={{fontSize:18}}>{selReason.emoji}</span>
-              <span style={{fontSize:NC_TYPE.meta,fontWeight:600,color:T.tSoft}}>{selReason.isFreewrite ? `"${selReason.desc.length > 60 ? selReason.desc.slice(0,60)+"…" : selReason.desc}"` : selReason.label}</span>
+              <span style={{fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,color:T.tSoft}}>{selReason.isFreewrite ? `"${selReason.desc.length > 60 ? selReason.desc.slice(0,60)+"…" : selReason.desc}"` : selReason.label}</span>
             </div>
 
             {loading && (
@@ -1476,7 +1476,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
     outline:"none", resize:"vertical", lineHeight:1.5,
     ...extra,
   });
-  const labelSt = {fontSize:NC_TYPE.small,color:T.tFaint,fontWeight:700,letterSpacing:1,marginBottom:2,fontFamily:NC_FONT_STACK};
+  const labelSt = {fontSize:NC_TYPE.small,color:T.tFaint,fontWeight:`var(--nc-fw-strong, 700)`,letterSpacing:1,marginBottom:2,fontFamily:NC_FONT_STACK};
   const micBtnSt = (active) => ({
     width:28, height:28, borderRadius:"50%",
     border:`1px solid ${active?"#B87A5A":T.brd}`,
@@ -1495,7 +1495,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
         <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${T.brd}`,flexShrink:0,background:T.card}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
             <div>
-              <h3 style={{margin:"0 0 1px",fontSize:NC_TYPE.title,fontWeight:600,color:T.text}}>&#x2721; Shaila Log</h3>
+              <h3 style={{margin:"0 0 1px",fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,color:T.text}}>&#x2721; Shaila Log</h3>
               <p style={{margin:0,fontSize:NC_TYPE.small,color:T.tFaint}}>{allShailas.length} shailo{allShailas.length!==1?"s":""}</p>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -1523,7 +1523,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
           {/* "New Shaila" toggle button */}
           <button
             onClick={()=>setAddingNew(p=>!p)}
-            style={{width:"100%",padding:"8px 0",borderRadius:RADIUS.sm,border:`1.5px dashed ${addingNew?T.text:T.brd}`,background:addingNew?T.bgW:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:addingNew?T.text:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
+            style={{width:"100%",padding:"8px 0",borderRadius:RADIUS.sm,border:`1.5px dashed ${addingNew?T.text:T.brd}`,background:addingNew?T.bgW:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,color:addingNew?T.text:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
             {addingNew ? "✕ Cancel new shaila" : "+ Add shaila manually"}
           </button>
         </div>
@@ -1531,7 +1531,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
         {/* Manual-add form (slides open under header) — autosaves on blur, no Save button */}
         {addingNew && (
           <div data-new-shaila-form="true" style={{padding:"14px 20px 16px",borderBottom:`1px solid ${T.brd}`,background:T.bgW||T.bg,flexShrink:0}}>
-            <p style={{margin:"0 0 10px",fontSize:NC_TYPE.small,fontWeight:700,color:T.tSoft,fontFamily:NC_FONT_STACK,letterSpacing:.5}}>NEW SHAILA — fill in what you have, click away when done</p>
+            <p style={{margin:"0 0 10px",fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,color:T.tSoft,fontFamily:NC_FONT_STACK,letterSpacing:.5}}>NEW SHAILA — fill in what you have, click away when done</p>
 
             {/* Question */}
             <div style={{marginBottom:10}}>
@@ -1600,12 +1600,12 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
 
         {/* Status legend / filter */}
         <div style={{padding:"8px 20px",borderBottom:`1px solid ${T.brd}`,background:T.card,display:"flex",gap:SP.sm,flexShrink:0,alignItems:"center"}}>
-          <span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:700,letterSpacing:.5,marginRight:4}}>FILTER:</span>
+          <span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-strong, 700)`,letterSpacing:.5,marginRight:4}}>FILTER:</span>
           {[["researching",CLR_RESEARCHING,"Researching"],["have_answer",CLR_HAVE_ANSWER,"Have answer"],["got_back",CLR_GOT_BACK,"Got back"]].map(([k,c,lbl])=>{
             const active = statusFilter === k;
             return (
               <button key={k} onClick={()=>setStatusFilter(p=>p===k?null:k)}
-                style={{display:"flex",alignItems:"center",gap:SP.xs,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,cursor:"pointer",padding:"3px 8px",borderRadius:RADIUS.sm,border:`1px solid ${active?c:T.brd}`,background:active?`${c}22`:"transparent",color:active?c:T.tFaint,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",fontWeight:active?700:400}}>
+                style={{display:"flex",alignItems:"center",gap:SP.xs,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,cursor:"pointer",padding:"3px 8px",borderRadius:RADIUS.sm,border:`1px solid ${active?c:T.brd}`,background:active?`${c}22`:"transparent",color:active?c:T.tFaint,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",fontWeight:active?`var(--nc-fw-strong, 700)`:`var(--nc-fw-normal, 400)`}}>
                 <span style={{width:8,height:8,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/>
                 {lbl}
               </button>
@@ -1637,7 +1637,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
               <div key={s.id} style={{display:"flex",gap:10,paddingBottom:18,marginBottom:18,borderBottom:`1px solid ${T.brd}`}}>
                 {/* Number + status dot */}
                 <div style={{flexShrink:0,width:28,paddingTop:2,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
-                  <span style={{fontSize:NC_TYPE.meta,color:GOLD,fontWeight:700,fontFamily:NC_FONT_STACK}}>{shailaNum}.</span>
+                  <span style={{fontSize:NC_TYPE.meta,color:GOLD,fontWeight:`var(--nc-fw-strong, 700)`,fontFamily:NC_FONT_STACK}}>{shailaNum}.</span>
                   <button
                     title={canCycle ? (st==="have_answer" ? "Mark: got back to asker" : "Undo: not yet got back") : "Add an answer first"}
                     onClick={()=>cycleGotBack(s)}
@@ -1659,7 +1659,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                       #{shailaNum} · {dateStr}
                       {s.completed ? " · completed" : ""}
                       {" · "}
-                      <span style={{color:stColor,fontWeight:600}}>{stTip}</span>
+                      <span style={{color:stColor,fontWeight:`var(--nc-fw-semibold, 600)`}}>{stTip}</span>
                     </div>
                   )}
                   {/* Got back pill — prominent, above Q/A */}
@@ -1749,10 +1749,10 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini", answerSnippet
         margin: "6px 0 10px",
       }}>
         {shailaNum && (
-          <span style={{fontSize:NC_TYPE.small,fontWeight:700,fontFamily:NC_FONT_STACK,color:"#C8A84C",flexShrink:0}}>#{shailaNum}</span>
+          <span style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,fontFamily:NC_FONT_STACK,color:"#C8A84C",flexShrink:0}}>#{shailaNum}</span>
         )}
         <div style={{flex:1,minWidth:0}}>
-          <span style={{fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:600,color:accentColor}}>
+          <span style={{fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:`var(--nc-fw-semibold, 600)`,color:accentColor}}>
             {isGotBack ? "Got back to asker! ✓" : "Got back to asker?"}
           </span>
           {answerSnippet && (
@@ -1768,7 +1768,7 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini", answerSnippet
         </div>
         {!isGotBack && (
           <button onClick={e=>{e.stopPropagation();onToggle?.();}} title="Mark: got back to asker"
-            style={{width:30,height:30,borderRadius:"50%",border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.title,fontWeight:700,flexShrink:0,transition:"background 0.2s"}}>
+            style={{width:30,height:30,borderRadius:"50%",border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-strong, 700)`,flexShrink:0,transition:"background 0.2s"}}>
             ✓
           </button>
         )}
@@ -1799,9 +1799,9 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini", answerSnippet
       }}
     >
       {shailaNum && (
-        <span style={{fontSize:NC_TYPE.small,fontWeight:700,fontFamily:NC_FONT_STACK,color:"#C8A84C",marginRight:1}}>#{shailaNum}</span>
+        <span style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-strong, 700)`,fontFamily:NC_FONT_STACK,color:"#C8A84C",marginRight:1}}>#{shailaNum}</span>
       )}
-      <span style={{fontSize:NC_TYPE.small,fontWeight:600,fontFamily:NC_FONT_STACK,color:accentColor}}>
+      <span style={{fontSize:NC_TYPE.small,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,color:accentColor}}>
         {isGotBack ? "Got back! ✓" : "Got back?"}
       </span>
       {/* The mini pill used to render the answer summary in a 60px-wide box — about
@@ -1812,7 +1812,7 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini", answerSnippet
           readable copy lives on the full-size pill and the Shailos list. */}
       {isGotBack
         ? <span style={{fontSize:NC_TYPE.small,color:"#6AB87D",opacity:.7}}>↩</span>
-        : <span style={{fontSize:NC_TYPE.small,background:"#C8A84C",color:"#fff",borderRadius:"50%",width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:700,flexShrink:0}}>✓</span>
+        : <span style={{fontSize:NC_TYPE.small,background:"#C8A84C",color:"#fff",borderRadius:"50%",width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:`var(--nc-fw-strong, 700)`,flexShrink:0}}>✓</span>
       }
     </div>
   );

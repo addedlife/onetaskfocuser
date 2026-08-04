@@ -3718,7 +3718,7 @@ const css = `
 .dp-app-name {
   font-size: 19px;
   line-height: 1.15;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   color: var(--dp-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3727,7 +3727,7 @@ const css = `
 .dp-app-build,
 .dp-app-time {
   margin-top: 2px;
-  font-weight: 400;
+  font-weight: var(--nc-fw-normal, 400);
   color: var(--dp-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3766,7 +3766,7 @@ const css = `
 }
 .dp-material-icon {
   line-height: 1;
-  font-weight: 400;
+  font-weight: var(--nc-fw-normal, 400);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3804,7 +3804,7 @@ const css = `
   justify-content: flex-start;
   gap: 0;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   text-align: left;
 }
 .dp-nav-item:hover {
@@ -3881,7 +3881,7 @@ const css = `
 }
 .dp-rail-status-text {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   line-height: 18px;
   color: var(--dp-muted);
   text-align: left;
@@ -3925,7 +3925,7 @@ const css = `
 }
 .dp-collapsed-bt {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   color: var(--dp-muted);
 }
 .dp-collapsed-icon-button {
@@ -3948,7 +3948,7 @@ const css = `
   color: var(--dp-muted);
   text-align: center;
   font-size: 9px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3980,7 +3980,7 @@ const css = `
 .dp-prompt-title {
   color: var(--dp-blue);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-prompt-subtitle {
   margin-top: 2px;
@@ -4014,7 +4014,7 @@ const css = `
   margin: 0;
   color: var(--dp-text);
   font-size: 22px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-build-dialog p {
   margin: 12px 0 0;
@@ -4061,7 +4061,7 @@ const css = `
 .dp-call-text {
   color: var(--dp-call-banner-text);
   font-size: 16px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4079,7 +4079,7 @@ const css = `
   padding: 0 18px;
   cursor: pointer;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   display: inline-flex;
   align-items: center;
@@ -4239,7 +4239,7 @@ const css = `
   margin: 0;
   color: var(--dp-text);
   font-size: 20px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-history-status {
   border-radius: 8px;
@@ -4247,7 +4247,7 @@ const css = `
   background: var(--dp-bg-input);
   color: var(--dp-muted);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-message-header-actions {
   display: flex;
@@ -4299,7 +4299,7 @@ const css = `
   background: transparent;
   color: var(--dp-muted);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   cursor: pointer;
   border-bottom: 2px solid transparent;
 }
@@ -4321,7 +4321,7 @@ const css = `
   gap: 12px;
   color: var(--dp-muted);
   font-size: 15px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-empty-conversations .dp-material-icon {
   color: var(--dp-border);
@@ -4351,7 +4351,7 @@ const css = `
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-conversation-avatar {
   width: 40px;
@@ -4376,19 +4376,19 @@ const css = `
   white-space: nowrap;
   color: var(--dp-text);
   font-size: 16px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-conversation-row.is-unread .dp-conversation-name,
 .dp-conversation-row.is-unread .dp-conversation-preview,
 .dp-conversation-row.is-unread .dp-conversation-time {
-  font-weight: 600;
+  font-weight: var(--nc-fw-semibold, 600);
 }
 .dp-conversation-badges {
   display: none;
   gap: 8px;
   color: var(--dp-muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-conversation-badges .is-danger {
   color: var(--dp-red);
@@ -4500,7 +4500,7 @@ const css = `
 }
 .dp-no-conversation strong {
   font-size: 16px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-no-conversation span {
   color: var(--dp-disabled);
@@ -4535,7 +4535,7 @@ const css = `
 .dp-thread-identity strong {
   color: var(--dp-text);
   font-size: 16px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4632,7 +4632,7 @@ const css = `
   align-items: center;
   gap: 10px;
   min-height: 38px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   white-space: nowrap;
 }
 .dp-thread-actions-menu .dp-floating-menu button span:last-child {
@@ -4677,7 +4677,7 @@ const css = `
   gap: 5px;
   color: var(--dp-text-second);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   white-space: nowrap;
 }
 .dp-pinned-strip-list {
@@ -4711,7 +4711,7 @@ const css = `
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-message-scroll {
   min-height: 0;
@@ -4760,7 +4760,7 @@ const css = `
   margin: 16px 0;
   color: var(--dp-muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-message-bubble {
   max-width: min(68ch, 76%);
@@ -4803,7 +4803,7 @@ const css = `
 }
 .dp-message-body a {
   color: inherit;
-  font-weight: 700;
+  font-weight: var(--nc-fw-strong, 700);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -4836,11 +4836,11 @@ const css = `
 }
 .dp-message-status.is-sending,
 .dp-message-status.is-confirming {
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-message-status.is-failed {
   color: var(--dp-message-failed-text);
-  font-weight: 600;
+  font-weight: var(--nc-fw-semibold, 600);
 }
 .dp-message-retry {
   display: inline-flex;
@@ -4852,7 +4852,7 @@ const css = `
   border-radius: 10px;
   color: var(--dp-message-failed-text);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--nc-fw-semibold, 600);
   cursor: pointer;
 }
 .dp-message-retry:hover {
@@ -4933,7 +4933,7 @@ const css = `
   background: var(--dp-bg-hover);
   color: var(--dp-text-second);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   cursor: pointer;
 }
 .dp-message-bubble.is-outgoing .dp-attachment-row button {
@@ -5000,7 +5000,7 @@ const css = `
   border-radius: 7px;
   background: var(--dp-bg-main);
   color: var(--dp-blue-dark);
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   cursor: pointer;
 }
 .dp-compose-bar {
@@ -5050,7 +5050,7 @@ const css = `
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   font-size: 12px;
 }
 .dp-compose-attachment-chip small {
@@ -5136,7 +5136,7 @@ const css = `
 .dp-thread-calls-header strong {
   color: var(--dp-text);
   font-size: 16px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-thread-calls-header span {
   margin-top: 2px;
@@ -5201,7 +5201,7 @@ const css = `
   background: transparent;
   color: var(--dp-muted);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   border-bottom: 2px solid transparent;
   cursor: pointer;
 }
@@ -5229,7 +5229,7 @@ const css = `
   margin-bottom: 4px;
   color: var(--dp-muted);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-thread-dialer-top input {
   width: 100%;
@@ -5254,7 +5254,7 @@ const css = `
   border-radius: 4px;
   color: var(--dp-text);
   font-size: 15px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   background: var(--dp-bg-input);
 }
 .dp-thread-dialer-actions {
@@ -5297,7 +5297,7 @@ const css = `
   display: inline-block !important;
   margin-top: 3px !important;
   font-size: 11px !important;
-  font-weight: 600 !important;
+  font-weight: var(--nc-fw-semibold, 600) !important;
   color: var(--dp-green, #34a853) !important;
   white-space: nowrap !important;
 }
@@ -5336,7 +5336,7 @@ const css = `
 .dp-thread-call-row strong {
   color: var(--dp-text);
   font-size: 15px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-thread-call-row span {
   margin-top: 2px;
@@ -5400,7 +5400,7 @@ const css = `
 }
 .dp-contacts-list strong {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-contacts-list span,
 .dp-contact-phone-list span,
@@ -5437,7 +5437,7 @@ const css = `
   gap: 5px;
   color: var(--dp-text-second);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-contact-editor input {
   min-height: 38px;
@@ -5466,7 +5466,7 @@ const css = `
 .dp-settings-shell h2 {
   margin: 10px 0 0;
   font-size: 24px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   color: var(--dp-text);
 }
 .dp-tab-placeholder p,
@@ -5494,7 +5494,7 @@ const css = `
   padding: 0 14px;
   font: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   cursor: pointer;
 }
 .dp-settings-sections button.is-active {
@@ -5519,7 +5519,7 @@ const css = `
   gap: 16px;
   color: var(--dp-text);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-settings-toggle input {
   width: 20px;
@@ -5533,7 +5533,7 @@ const css = `
   background: var(--dp-bg-input);
   color: var(--dp-muted);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   padding: 4px 7px;
 }
 .dp-placeholder-stats {
@@ -5551,14 +5551,14 @@ const css = `
   display: block;
   font-size: 26px;
   line-height: 1;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   color: var(--dp-text);
 }
 .dp-placeholder-stats label {
   display: block;
   margin-top: 5px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
   color: var(--dp-muted);
 }
 .dp-host-label {
@@ -5566,7 +5566,7 @@ const css = `
   gap: 6px;
   color: var(--dp-text-second);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-host-label input {
   height: 42px;
@@ -5604,7 +5604,7 @@ const css = `
 .dp-device-manager h3 {
   margin: 0;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-device-status,
 .dp-device-empty {
@@ -5652,7 +5652,7 @@ const css = `
   background: var(--dp-bg-main);
   color: var(--dp-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--nc-fw-strong, 700);
 }
 .dp-bridge-state.is-ready {
   color: var(--dp-green-dark);
@@ -5669,7 +5669,7 @@ const css = `
   cursor: pointer;
   color: var(--dp-muted);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--nc-fw-semibold, 600);
 }
 .dp-bridge-details .dp-device-list {
   margin-top: 8px;
@@ -5689,7 +5689,7 @@ const css = `
   padding: 12px 14px;
   color: var(--dp-muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-ledger-grid {
   display: grid;
@@ -5725,7 +5725,7 @@ const css = `
   color: #8A1F1F;
   padding: 10px 12px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-action-toast {
   position: absolute;
@@ -5739,7 +5739,7 @@ const css = `
   color: var(--dp-text-second);
   padding: 10px 12px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--nc-fw-medium, 500);
 }
 .dp-action-toast + .dp-error-toast {
   bottom: 66px;
@@ -5886,7 +5886,7 @@ const css = `
   }
   .dp-message-header-top h2 {
     font-size: 14px;
-    font-weight: 600;
+    font-weight: var(--nc-fw-semibold, 600);
   }
   .dp-message-search {
     height: 36px;
@@ -5937,7 +5937,7 @@ const css = `
   }
   .dp-thread-calls-header strong {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: var(--nc-fw-semibold, 600);
     letter-spacing: 0.02em;
     text-transform: uppercase;
     color: var(--dp-muted);
@@ -6039,7 +6039,7 @@ const css = `
   }
   .dp-thread-calls-header strong {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: var(--nc-fw-semibold, 600);
     letter-spacing: 0.02em;
     text-transform: uppercase;
     color: var(--dp-muted);
@@ -6109,7 +6109,7 @@ const css = `
     background: transparent;
     color: var(--dp-muted);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: var(--nc-fw-medium, 500);
     cursor: pointer;
     white-space: nowrap;
     flex-shrink: 0;
@@ -6958,11 +6958,11 @@ export function DeskPhoneWebPanel({
           {deleteAllCallsConfirm && (
             <div style={{position:"fixed",inset:0,zIndex:9900,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={() => setDeleteAllCallsConfirm(false)}>
               <div onClick={e=>e.stopPropagation()} style={{background:COLORS.bgMain,borderRadius:RADIUS.md,padding:"24px 28px",maxWidth:360,boxShadow:"0 4px 16px rgba(0,0,0,0.15)"}}>
-                <p style={{fontSize:NC_TYPE.title,fontWeight:600,color:COLORS.textPrimary,margin:"0 0 12px"}}>Delete all call history?</p>
+                <p style={{fontSize:NC_TYPE.title,fontWeight:`var(--nc-fw-semibold, 600)`,color:COLORS.textPrimary,margin:"0 0 12px"}}>Delete all call history?</p>
                 <p style={{fontSize:NC_TYPE.body,color:COLORS.textMuted,margin:"0 0 20px",lineHeight:1.5}}>This will permanently delete all calls from DeskPhone Web.</p>
                 <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-                  <button onClick={() => setDeleteAllCallsConfirm(false)} style={{padding:"8px 16px",borderRadius:RADIUS.sm,border:`1px solid ${COLORS.border}`,background:"transparent",color:COLORS.textMuted,cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:500,fontFamily:"inherit"}}>Cancel</button>
-                  <button onClick={() => {setDeleteAllCallsConfirm(false); runCommand("/delete-all-call-history", "delete all call history");}} style={{padding:"8px 16px",borderRadius:RADIUS.sm,border:"none",background:COLORS.accentRed,color:COLORS.textOnAccent,cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:600,fontFamily:"inherit"}}>Delete All</button>
+                  <button onClick={() => setDeleteAllCallsConfirm(false)} style={{padding:"8px 16px",borderRadius:RADIUS.sm,border:`1px solid ${COLORS.border}`,background:"transparent",color:COLORS.textMuted,cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-medium, 500)`,fontFamily:"inherit"}}>Cancel</button>
+                  <button onClick={() => {setDeleteAllCallsConfirm(false); runCommand("/delete-all-call-history", "delete all call history");}} style={{padding:"8px 16px",borderRadius:RADIUS.sm,border:"none",background:COLORS.accentRed,color:COLORS.textOnAccent,cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:"inherit"}}>Delete All</button>
                 </div>
               </div>
             </div>

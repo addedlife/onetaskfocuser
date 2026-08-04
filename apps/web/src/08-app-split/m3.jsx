@@ -183,7 +183,9 @@ export function denseListVars({ dense = false, density = null, narrow = false, p
     // M3 list item type: label = body-large 16sp, supporting = body-medium 14sp.
     '--md-list-item-label-text-size': '16px',
     '--md-list-item-label-text-line-height': '21px',
-    '--md-list-item-label-text-weight': '500',
+    // Through the scale, not a literal, so the Readability slider reaches list rows
+    // too (ticket qRYPTmgc). Resolves against the app root's --nc-fw-*.
+    '--md-list-item-label-text-weight': 'var(--nc-fw-medium, 500)',
     '--md-list-item-supporting-text-size': '14px',
     '--md-list-item-supporting-text-line-height': compact ? '18px' : '20px',
     // label-medium rather than M3's label-small (11sp) for trailing metadata:

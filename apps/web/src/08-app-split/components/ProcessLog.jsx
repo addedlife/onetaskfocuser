@@ -205,7 +205,7 @@ export function ProcessLogPopup({ C, surfaceId = null, zIndex = 9200 }) {
           {suiteIcon(failed ? 'error' : running ? 'sync' : 'check_circle', 16)}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: NC_TYPE.body, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: NC_TYPE.body, color: C.text, fontWeight: `var(--nc-fw-semibold, 600)`, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {run.label || run.kind}
           </div>
           {/* Collapsed, the subtitle carries the verdict rather than the
@@ -262,7 +262,7 @@ export function ProcessLogPanel({ C, surfaceId = null }) {
     <div style={{ fontFamily: NC_FONT_STACK, display: 'flex', flexDirection: 'column', gap: SP.sm, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: NC_TYPE.body, color: C.text, fontWeight: 600 }}>{surfaceLabel(mySurface)}</div>
+          <div style={{ fontSize: NC_TYPE.body, color: C.text, fontWeight: `var(--nc-fw-semibold, 600)` }}>{surfaceLabel(mySurface)}</div>
           <div style={{ fontSize: NC_TYPE.meta, color: C.muted }}>
             {runs.length ? `${runs.length} recorded process${runs.length === 1 ? '' : 'es'} on this device` : 'Nothing recorded on this device yet.'}
           </div>

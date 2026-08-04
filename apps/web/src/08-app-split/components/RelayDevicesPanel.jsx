@@ -87,7 +87,7 @@ export default function RelayDevicesPanel({ T, type }) {
   return (
     <div style={{ fontFamily: NC_FONT_STACK }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP.sm }}>
-        <div style={{ fontSize: type?.section || NC_TYPE.body, fontWeight: 600, color: T.text }}>Phone hosts</div>
+        <div style={{ fontSize: type?.section || NC_TYPE.body, fontWeight: `var(--nc-fw-semibold, 600)`, color: T.text }}>Phone hosts</div>
         <ActionBtn variant="text" containerColor={T.card} labelColor={T.tSoft}
           height={36} labelSize={NC_TYPE.small} onClick={load}>Refresh</ActionBtn>
       </div>
@@ -132,7 +132,7 @@ export default function RelayDevicesPanel({ T, type }) {
               padding: SP.sm, background: T.card,
             }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: SP.xs, flexWrap: 'wrap' }}>
-                <div style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: T.text }}>{d.label}</div>
+                <div style={{ fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-semibold, 600)`, color: T.text }}>{d.label}</div>
                 <div style={{ fontSize: NC_TYPE.small, color: d.status === 'approved' ? T.tSoft : (T.danger || T.tSoft) }}>
                   {copy.label}
                 </div>

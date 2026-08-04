@@ -169,11 +169,11 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
           }}>
             <span className="material-symbols-rounded" style={{ fontSize: NC_TYPE.title, color: m.color }}>{m.icon}</span>
           </div>
-          <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>{m.label}</span>
+          <span style={{ fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.text, fontFamily: NC_FONT_STACK }}>{m.label}</span>
         </div>
         {change !== null && (
           <span style={{
-            fontSize: NC_TYPE.small, fontWeight: 600, color: changeColor,
+            fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-semibold, 600)`, color: changeColor,
             fontFamily: NC_FONT_STACK, background: `${changeColor}14`,
             borderRadius: RADIUS.pill, padding: "2px 7px",
           }}>
@@ -196,7 +196,7 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
           </div>
         ) : null}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: m.color, fontFamily: NC_FONT_STACK, lineHeight: 1.1, letterSpacing: -0.5 }}>
+          <div style={{ fontSize: 28, fontWeight: `var(--nc-fw-strong, 800)`, color: m.color, fontFamily: NC_FONT_STACK, lineHeight: 1.1, letterSpacing: -0.5 }}>
             {period === "day" ? displayToday : displayAvg}
           </div>
           <div style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 3 }}>
@@ -245,7 +245,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "18px 20px 14px", borderBottom: `1px solid ${C.divider}` }}>
-          <span style={{ fontSize: NC_TYPE.title, fontWeight: 700, color: C.text }}>Connect Health Data</span>
+          <span style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-strong, 700)`, color: C.text }}>Connect Health Data</span>
           <IconBtn icon="close" iconSize={16} color={C.muted} onClick={onClose} title="Close" aria-label="Close" />
         </div>
 
@@ -264,18 +264,18 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                <span style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: C.text }}>Google Health</span>
-                <span style={{ fontSize: NC_TYPE.small, fontWeight: 600, padding: "1px 7px", borderRadius: RADIUS.sm,
+                <span style={{ fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-strong, 700)`, color: C.text }}>Google Health</span>
+                <span style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-semibold, 600)`, padding: "1px 7px", borderRadius: RADIUS.sm,
                   background: googleHealthLinked ? `${C.success || "#34A853"}20` : `${C.accent}18`,
                   color: googleHealthLinked ? C.success || "#34A853" : C.accent }}>
                   {googleHealthLinked ? "Connected" : "Recommended"}
                 </span>
               </div>
               {connectError ? (
-                <div style={{ fontSize: NC_TYPE.meta, color: C.danger || "#EA4335", lineHeight: 1.4, fontWeight: 500 }}>
+                <div style={{ fontSize: NC_TYPE.meta, color: C.danger || "#EA4335", lineHeight: 1.4, fontWeight: `var(--nc-fw-medium, 500)` }}>
                   {connectError}
                   {connectError.includes("not set") && (
-                    <span style={{ color: C.muted, fontWeight: 400 }}>{" "}— follow the Setup Guide on this page.</span>
+                    <span style={{ color: C.muted, fontWeight: `var(--nc-fw-normal, 400)` }}>{" "}— follow the Setup Guide on this page.</span>
                   )}
                 </div>
               ) : (
@@ -298,7 +298,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
             padding: "10px 14px", border: `1px solid ${C.divider}`, borderRadius: 10 }}>
             <div>
-              <div style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, marginBottom: 1 }}>Manual entry</div>
+              <div style={{ fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.text, marginBottom: 1 }}>Manual entry</div>
               <div style={{ fontSize: NC_TYPE.small, color: C.muted }}>Log today's values yourself</div>
             </div>
             <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={30} labelSize={12}
@@ -339,7 +339,7 @@ function ManualEntryModal({ C, onClose, onSave }) {
 
   const field = (label, value, set, placeholder) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK }}>{label}</label>
+      <label style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.muted, fontFamily: NC_FONT_STACK }}>{label}</label>
       <input type="number" value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
         style={{
           height: 36, borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`,
@@ -372,7 +372,7 @@ function ManualEntryModal({ C, onClose, onSave }) {
         boxShadow: ELEV[4], padding: "20px 22px",
         fontFamily: NC_FONT_STACK,
       }}>
-        <div style={{ fontSize: NC_TYPE.title, fontWeight: 700, color: C.text, marginBottom: 16 }}>Log Today's Data</div>
+        <div style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-strong, 700)`, color: C.text, marginBottom: 16 }}>Log Today's Data</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {field("Steps",            steps,     setSteps,  "e.g. 7500")}
           {field("Heart Rate (bpm)", heartRate, setHR,     "e.g. 72")}
@@ -473,7 +473,7 @@ export function HealthPage({
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
           <span className="material-symbols-rounded" style={{ fontSize: 22, color: "#EA4335" }}>favorite</span>
           <div>
-            <div style={{ fontSize: NC_TYPE.title, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>Health</div>
+            <div style={{ fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-strong, 700)`, color: C.text, lineHeight: 1.2 }}>Health</div>
             <div style={{ fontSize: NC_TYPE.small, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 5, height: 5, borderRadius: RADIUS.pill, background: connected ? "#34A853" : C.faint, flexShrink: 0 }} />
               {sourceLabel}
@@ -586,7 +586,7 @@ export function HealthPage({
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: m.color, fontFamily: NC_FONT_STACK, lineHeight: 1.2 }}>
+                    <div style={{ fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-strong, 700)`, color: m.color, fontFamily: NC_FONT_STACK, lineHeight: 1.2 }}>
                       {fmtVal(key, val ?? (isDemo ? DEMO_DAY[0][key] : null))}
                     </div>
                     <div style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK }}>
@@ -623,7 +623,7 @@ export function HealthPage({
         {/* Setup instructions — only when not connected */}
         {!connected && (
           <div style={{ marginTop: 28 }}>
-            <div style={{ fontSize: NC_TYPE.meta, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 12 }}>
+            <div style={{ fontSize: NC_TYPE.meta, fontWeight: `var(--nc-fw-strong, 700)`, color: C.muted, letterSpacing: 1, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 12 }}>
               Setup Guide
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -655,7 +655,7 @@ export function HealthPage({
         {onSetHealthCardVisible && (
           <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${C.divider}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div>
-              <div style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>Show on NerveCenter</div>
+              <div style={{ fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.text, fontFamily: NC_FONT_STACK }}>Show on NerveCenter</div>
               <div style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>Display a compact health strip in the NerveCenter dashboard</div>
             </div>
             <Switch selected={healthCardVisible} onChange={() => onSetHealthCardVisible(!healthCardVisible)}
@@ -730,9 +730,9 @@ function SetupStep({ num, color, title, steps, C }) {
         <div style={{
           width: 22, height: 22, borderRadius: RADIUS.pill, background: `${color}18`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0, fontSize: NC_TYPE.small, fontWeight: 700, color, fontFamily: NC_FONT_STACK,
+          flexShrink: 0, fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, color, fontFamily: NC_FONT_STACK,
         }}>{num}</div>
-        <span style={{ flex: 1, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>{title}</span>
+        <span style={{ flex: 1, fontSize: NC_TYPE.meta, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.text, fontFamily: NC_FONT_STACK }}>{title}</span>
         <span slot="icon" className="material-symbols-rounded" style={{ fontSize: NC_TYPE.title, color: C.faint }}>
           {open ? "expand_less" : "expand_more"}
         </span>

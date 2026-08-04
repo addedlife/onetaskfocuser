@@ -400,7 +400,7 @@ export function BugLog({ T, railVisible = true }) {
             <span style={{
               position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, padding: '0 4px',
               borderRadius: RADIUS.pill, background: C.danger, color: '#fff',
-              fontSize: NC_TYPE.small, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-semibold, 600)`, display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontFamily: NC_FONT_STACK, pointerEvents: 'none',
             }}>{unresolvedCount}</span>
           )}
@@ -435,7 +435,7 @@ export function BugLog({ T, railVisible = true }) {
             {sym('bug_report', 20, C.accent)}
             <span style={{
               flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title, fontWeight: 600, color: C.text,
+              fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.text,
             }}>Bug Log</span>
             <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, whiteSpace: 'nowrap', flexShrink: 0 }}>
               {unresolvedCount} open

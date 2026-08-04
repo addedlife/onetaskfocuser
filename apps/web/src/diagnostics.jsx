@@ -45,7 +45,7 @@ export function DiagnosticsOverlay() {
 
   const btn = (label, fn, bg) => (
     <button onClick={fn} disabled={!!busy}
-      style={{ flex: 1, padding: '12px 8px', borderRadius: 8, border: 'none', background: bg || '#2563eb', color: '#fff', fontSize: NC_TYPE.body, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+      style={{ flex: 1, padding: '12px 8px', borderRadius: 8, border: 'none', background: bg || '#2563eb', color: '#fff', fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-semibold, 600)`, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
       {label}
     </button>
   );

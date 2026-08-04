@@ -355,7 +355,7 @@ function LoginScreen({ onLogin, initialError = "" }) {
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:28 }}>
           <div style={{ fontSize:36, lineHeight:1, marginBottom:10 }}>◎</div>
-          <h1 style={{ fontSize:22, fontWeight:700, color:S.text, fontFamily:NC_FONT_STACK, margin:0, letterSpacing:0.5 }}>Shamash Pro 4</h1>
+          <h1 style={{ fontSize:22, fontWeight:`var(--nc-fw-strong, 700)`, color:S.text, fontFamily:NC_FONT_STACK, margin:0, letterSpacing:0.5 }}>Shamash Pro 4</h1>
           <p style={{ fontSize:NC_TYPE.meta, color:S.tFaint, marginTop:5, fontFamily:NC_FONT_STACK }}>Sign in to continue</p>
         </div>
 

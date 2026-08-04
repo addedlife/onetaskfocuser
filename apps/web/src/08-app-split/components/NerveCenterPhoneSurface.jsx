@@ -161,7 +161,7 @@ function linkedMessageParts(text, linkStyle = {}) {
     const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
     parts.push(
       <a key={`url-${offset}`} href={href} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}
-        style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2, fontWeight: 600, ...linkStyle }}>
+        style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2, fontWeight: `var(--nc-fw-semibold, 600)`, ...linkStyle }}>
         {trimmed}
       </a>
     );
@@ -1282,7 +1282,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             onBlur={() => setTimeout(() => setComposeFocused(false), 160)}
             placeholder="Search contact or enter number..."
             autoFocus
-            style={{ width: "100%", height: 36, boxSizing: "border-box", padding: `0 ${SP.md}`, borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
+            style={{ width: "100%", height: 36, boxSizing: "border-box", padding: `0 ${SP.md}`, borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-normal, 400)`, outline: "none" }} />
           {composeFocused && suggestions.length > 0 && (
             <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 300 }}>
               <SuggestionList onPick={s => { setSelected({ name: s.name, number: s.num }); setNumber(s.num); setComposeSearch(s.name); setComposeIsNew(false); }} />
@@ -1293,7 +1293,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       {selected && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
           {suiteIcon("sms", 14)}
-          <span style={{ fontSize: NC_TYPE.body, color: C.muted, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
+          <span style={{ fontSize: NC_TYPE.body, color: C.muted, fontWeight: `var(--nc-fw-medium, 500)`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
           <IconBtn icon="close" iconSize={14} color={C.muted} onClick={closeCompose} title="Close" aria-label="Close" />
         </div>
       )}
@@ -1332,7 +1332,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer" }}>
           <span style={{ width: 28, height: 28, borderRadius: RADIUS.pill, background: C.hover, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, flexShrink: 0 }}>{suiteIcon("person", ICON.sm)}</span>
           <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+            <span style={{ display: "block", fontSize: NC_TYPE.control, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
             <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted }}>{s.num}</span>
           </span>
         </button>
@@ -1354,7 +1354,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       {(isIncoming || isOnCall || vmCount > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: dense ? 20 : (compact ? 28 : 36), padding: "0 2px" }}>
           <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: isIncoming ? C.success : isOnCall ? C.warning : C.danger }} />
-          <span style={{ flex: 1, minWidth: 0, fontSize: compact ? 13 : 14, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: compact ? 13 : 14, fontWeight: `var(--nc-fw-medium, 500)`, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {callerDisplay && (isIncoming || isOnCall) ? `${isIncoming ? "Incoming" : "On call"} · ${callerDisplay}` : `${vmCount} voicemail${vmCount === 1 ? "" : "s"}`}
           </span>
         </div>
@@ -1369,7 +1369,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: linkDotColor,
             // Handover in flight: the dot blinks until the new host's heartbeat confirms.
             animation: link.switching ? "nc-host-blink 1.1s ease-in-out infinite" : "none" }} />
-          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.control, fontWeight: 600, color: phoneLinkLive ? C.success : relayStale ? C.warning : C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.control, fontWeight: `var(--nc-fw-semibold, 600)`, color: phoneLinkLive ? C.success : relayStale ? C.warning : C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {linkStatusLabel}
           </span>
           {linkOffline && (
@@ -1435,7 +1435,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
               onBlur={() => setTimeout(() => setInputFocused(false), 160)}
               onKeyDown={e => e.key === "Enter" && dial()}
               placeholder="Name or number"
-              style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
+              style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.body, fontWeight: `var(--nc-fw-normal, 400)`, outline: "none" }} />
             <IconBtn variant="filled" icon="call" iconSize={14}
               color={number.trim() ? "#fff" : C.faint}
               containerColor={number.trim() ? C.success : "transparent"}
@@ -1450,7 +1450,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4 }}>
             {DIALER_KEYS.map(k => (
               <button key={k} onClick={() => setNumber(prev => prev + k)}
-                style={{ height: 40, borderRadius: RADIUS.xs, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: NC_TYPE.title, fontWeight: 400, fontFamily: NC_FONT_STACK }}>
+                style={{ height: 40, borderRadius: RADIUS.xs, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-normal, 400)`, fontFamily: NC_FONT_STACK }}>
                 {k}
               </button>
             ))}
@@ -1513,7 +1513,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       <span slot="start" style={phoneLeadIconStyle(isUnread ? C.accent : msgColor, isUnread ? C.hover : "transparent")}>{suiteIcon(msgIcon, 14)}</span>
                       {/* Message BODY is the read target (full headline size); sender drops
                           to the smaller supporting line — buglog "need a magnifier" ticket. */}
-                      <span slot="headline" style={{ fontWeight: isUnread ? 600 : 450, color: C.text, whiteSpace: "normal", wordBreak: "break-word", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{preview || thread._name}</span>
+                      <span slot="headline" style={{ fontWeight: isUnread ? `var(--nc-fw-semibold, 600)` : `var(--nc-fw-normal, 450)`, color: C.text, whiteSpace: "normal", wordBreak: "break-word", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{preview || thread._name}</span>
                       {(() => {
                         // Narrow card: sender AND time share the supporting line.
                         const meta = [preview ? thread._name : null, !rowMeta && time ? time : null].filter(Boolean).join(" · ");
@@ -1531,8 +1531,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       {/* Collapsed: body reads at full size, sender on the small line under it.
                           Expanded: the name headlines the open conversation as before. */}
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: isUnread ? 600 : (expanded ? 500 : 450), color: C.text, ...(expanded ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : { whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word" }) }}>{expanded ? thread._name : (preview || thread._name)}</span>
-                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
+                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: isUnread ? `var(--nc-fw-semibold, 600)` : (expanded ? `var(--nc-fw-medium, 500)` : `var(--nc-fw-normal, 450)`), color: C.text, ...(expanded ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : { whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word" }) }}>{expanded ? thread._name : (preview || thread._name)}</span>
+                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: `var(--nc-fw-normal, 400)` }}>{time}</span>}
                       </div>
                       {preview && !expanded && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: NC_TYPE.line }}>{thread._name}</span>}
                     </button>
@@ -1587,7 +1587,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                                 {(msgTime || (outgoing && sendStatus)) && (
                                   <div style={{ fontSize: NC_TYPE.small, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left", display: "flex", alignItems: "center", gap: 4, justifyContent: outgoing ? "flex-end" : "flex-start" }}>
                                     {outgoing && sendStatus && (
-                                      <span style={{ color: (sendFailed || sendStuck) ? C.danger : C.faint, fontWeight: (sendFailed || sendStuck) ? 600 : 400 }}>
+                                      <span style={{ color: (sendFailed || sendStuck) ? C.danger : C.faint, fontWeight: (sendFailed || sendStuck) ? `var(--nc-fw-semibold, 600)` : `var(--nc-fw-normal, 400)` }}>
                                         {sendStuck ? "Not confirmed" : (msg.sendStatusLabel || msg.SendStatusLabel || sendStatus)}{msgTime ? " · " : ""}
                                       </span>
                                     )}
@@ -1657,10 +1657,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                   return (
                     <ListItem key={`call-${idx}`} type="button" onClick={() => setOpenPhoneActionId(actionId)} style={{ borderRadius: RADIUS.sm, opacity: resolved ? 0.62 : 1 }}>
                       <span slot="start" style={phoneLeadIconStyle(color)}>{suiteIcon(icon, 14)}</span>
-                      <span slot="headline" style={{ fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                      <span slot="headline" style={{ fontWeight: `var(--nc-fw-medium, 500)`, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
                       {/* Narrow card: the time joins this line instead of taking a slot. */}
                       {needsCallback ? (
-                        <span slot="supporting-text" style={{ fontWeight: 700, color: C.danger }}>Needs callback{!rowMeta && time ? ` · ${time}` : ""}</span>
+                        <span slot="supporting-text" style={{ fontWeight: `var(--nc-fw-strong, 700)`, color: C.danger }}>Needs callback{!rowMeta && time ? ` · ${time}` : ""}</span>
                       ) : resolved ? (
                         <span slot="supporting-text" style={{ display: "inline-flex", alignItems: "center", gap: 3, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved{!rowMeta && time ? ` · ${time}` : ""}</span>
                       ) : (() => {
@@ -1696,13 +1696,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                     <span style={phoneLeadIconStyle(color)}>{suiteIcon(icon, 14)}</span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
+                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: `var(--nc-fw-medium, 500)`, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: `var(--nc-fw-normal, 400)` }}>{time}</span>}
                       </div>
                       {needsCallback ? (
-                        <span style={{ display: "inline-block", marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: 700, color: C.danger, background: C.bgSoft, borderRadius: RADIUS.pill, padding: `1px ${SP.xs}` }}>Needs callback</span>
+                        <span style={{ display: "inline-block", marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: `var(--nc-fw-strong, 700)`, color: C.danger, background: C.bgSoft, borderRadius: RADIUS.pill, padding: `1px ${SP.xs}` }}>Needs callback</span>
                       ) : resolved ? (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: 600, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved</span>
                       ) : (num && num !== name && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: NC_TYPE.line }}>{num}</span>)}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
