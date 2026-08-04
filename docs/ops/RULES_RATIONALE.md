@@ -24,6 +24,32 @@ Consequences encoded as rules:
 - Verification claims must match what was actually verified. "So no control is left
   minuscule" is false when the check was scoped to one flag on one surface.
 
+## Why "pushed" is not shipped
+
+The incident, 8/2–8/4/26. A docs commit (`d5290840`) added the full Firestore resource
+name to `MAP.md`, including a backticked `` `projects/` `` to mark where the name starts.
+`check-map.cjs` treats any backticked token containing a slash as a claim that a file
+exists on disk. It already exempted the short `users/...` doc-path form for exactly this
+reason; the full form was simply not in the list. So a documentation commit hard-failed
+the deploy workflow.
+
+That failure was invisible from the repo. `git push` succeeded, `origin/main` had the
+commits, and three sessions reported work as shipped. Two releases — 4.114.11
+(NerveCenter pins) and 4.114.12 (Pen launcher) — sat on `main` for two days while the
+live site served 4.114.10. The owner found it by reading the version string on reload.
+
+Two rules come out of it:
+
+- **Watch the run.** A push hands the work to CI; only CI makes it live. Not looking is
+  the same mistake as shipping behind an off-by-default flag — the commit says done, the
+  user gets nothing. `gh run watch` costs ~300 tokens and blocks ~2 minutes.
+- **A red run blocks the next session too**, because the queue is serial: every commit
+  behind the broken one is also unshipped. Fix it in the same turn.
+
+Related failure worth remembering: the deploy gates (`map:check`, lint, GM3, build) run
+in CI but only some of them are habitually run locally. `npm run map:check` is cheap and
+belongs in the local gate whenever a commit touches `docs/ops/MAP.md`.
+
 ## Why the DeskPhone build gate is not optional
 
 `deploy.ps1` hard-fails without a `changelog.json` entry for the upcoming build number:

@@ -55,6 +55,11 @@ enforcement tooling) goes near the front, or later items silently undo earlier o
   **Firebase Hosting is the only live target.** Netlify is fully decommissioned — the
   `netlify.toml` files are a labeled rollback artifact and build nothing. Never describe
   Netlify as live.
+- **A push is not a release until the run is green.** After every push,
+  `gh run watch $(gh run list --limit 1 --json databaseId -q '.[0].databaseId') --exit-status`.
+  If it fails, fix the cause and re-push in the same turn — never end a turn on a red run,
+  and never call anything "live" or "shipped" without having seen it pass. Costs ~300 tokens
+  and ~2 min. See `RULES_RATIONALE.md` § "Why pushed is not shipped".
 - Push at every logical package point, not once at the end. A 12-item worklist is 4–5 pushes.
 - If the harness put you on a `claude/...` branch, that is a workspace, not a destination —
   the commits still end up on `origin/main`.
