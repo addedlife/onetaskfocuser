@@ -34,7 +34,9 @@ for (const [, raw] of text.matchAll(/`([^`\n]+)`/g)) {
   if (/^https?:/.test(token)) continue;                 // URLs
   if (token.includes('*') || token.includes('…')) continue; // globs, elisions
   if (token.startsWith('--') || token.startsWith('?')) continue; // flags, URL params
-  if (token.startsWith('users/') || token.includes('{')) continue; // Firestore doc paths
+  // Firestore doc paths — both the short `users/...` form and the full resource
+  // name, which starts at `projects/`. Neither is a file on disk.
+  if (token.startsWith('users/') || token.startsWith('projects/') || token.includes('{')) continue;
   if (token === 'origin/main' || token === 'addedlife/onetaskfocuser') continue; // git refs
   const looksLikePath = token.includes('/') || /\.(jsx?|cjs|md|json|rules|ps1|csproj|kt|cs|html|txt)$/.test(token);
   if (!looksLikePath) continue;
