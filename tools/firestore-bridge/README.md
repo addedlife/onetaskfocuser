@@ -68,6 +68,11 @@ Everything `apps/web/functions/mcp.js` registers, including the write path:
 | `add_bug_note` | `{bugId, note}` |
 | `set_bug_status` | `{bugId, status, note}` — `resolved` **requires** a note |
 | `list_tasks` / `get_task` / `search_tasks` | see `mcp.js` |
+| `firestore_get` / `firestore_list` | `{path, …}` — any document or collection |
+| `firestore_set` / `firestore_delete` | `{path, data, confirm:true}` — under `users/rabbidanziger/**` only |
+| `rtdb_get` / `rtdb_set` | `{path, shallow}` / `{path, data, confirm:true}` |
+| `storage_list` / `storage_read` | `{prefix}` / `{path, maxBytes}` |
+| `auth_get_user` | `{uid}` or `{email}` |
 | `list_shailos` / `get_shaila` / `search_shailos` | see `mcp.js` |
 | `get_settings` / `get_meta` / `get_legacy_app_state` | — |
 

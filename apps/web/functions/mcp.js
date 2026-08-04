@@ -5,7 +5,7 @@
 // sessions can autopull and work tickets without the PC-only admin key.
 // The wire name stays "onetask-firestore-readonly" for connector back-compat.
 
-const { FIREBASE_PROJECT_ID, getAdminDb } = require("./_config.cjs");
+const { FIREBASE_PROJECT_ID, getAdminApp, getAdminAuth, getAdminDatabase, getAdminDb } = require("./_config.cjs");
 const USER_KEY = "rabbidanziger";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -138,6 +138,115 @@ const tools = [
       required: ["bugId", "status"], additionalProperties: false,
     },
   },
+
+  // ── General Firebase access ───────────────────────────────────────────────
+  // The tools above are one named tool per known shape, which is why a cloud
+  // session could work the Bug Log and nothing else. These are the general
+  // ones: any Firestore path, any Realtime Database path, Storage, Auth. Owner
+  // asked for this directly on 2026-08-04 ("I want firebase access from cloud
+  // for lots of things not just buglogs").
+  //
+  // Reads are unrestricted within the project. Writes are not: see assertWritePath.
+  {
+    name: "firestore_get",
+    description: "Read one Firestore document by full path, e.g. 'users/rabbidanziger/config/settings'. Optionally list its subcollection names.",
+    inputSchema: {
+      type: "object",
+      properties: { path: { type: "string" }, withSubcollections: { type: "boolean" } },
+      required: ["path"], additionalProperties: false,
+    },
+  },
+  {
+    name: "firestore_list",
+    description: "List documents in a Firestore collection by path, e.g. 'users/rabbidanziger/bugs'. Use fields[] to return only the fields you need — that is what keeps a big collection readable.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        where: {
+          type: "array",
+          description: "Filters, e.g. [{\"field\":\"status\",\"op\":\"==\",\"value\":\"unresolved\"}].",
+          items: {
+            type: "object",
+            properties: { field: { type: "string" }, op: { type: "string" }, value: {} },
+            required: ["field", "op", "value"], additionalProperties: false,
+          },
+        },
+        orderBy: { type: "string" },
+        direction: { type: "string", enum: ["asc", "desc"] },
+        fields: { type: "array", items: { type: "string" } },
+        limit: { type: "number", minimum: 1, maximum: MAX_LIMIT },
+      },
+      required: ["path"], additionalProperties: false,
+    },
+  },
+  {
+    name: "firestore_set",
+    description: "WRITE a Firestore document. Merges by default. Requires confirm:true, and the path must be under users/rabbidanziger.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" }, data: { type: "object" },
+        merge: { type: "boolean", description: "Default true. false REPLACES the whole document." },
+        confirm: { type: "boolean" },
+      },
+      required: ["path", "data", "confirm"], additionalProperties: false,
+    },
+  },
+  {
+    name: "firestore_delete",
+    description: "DELETE a Firestore document. Requires confirm:true and a path under users/rabbidanziger. Does not touch subcollections — it reports them instead.",
+    inputSchema: {
+      type: "object",
+      properties: { path: { type: "string" }, confirm: { type: "boolean" } },
+      required: ["path", "confirm"], additionalProperties: false,
+    },
+  },
+  {
+    name: "rtdb_get",
+    description: "Read a Realtime Database path (phone relay queue, host heartbeats, presence), e.g. 'relay/devices'. shallow:true returns only key names — use it first on a node you do not know the size of.",
+    inputSchema: {
+      type: "object",
+      properties: { path: { type: "string" }, shallow: { type: "boolean" } },
+      required: ["path"], additionalProperties: false,
+    },
+  },
+  {
+    name: "rtdb_set",
+    description: "WRITE a Realtime Database path. Requires confirm:true. Refuses the live relay command queue — a bad write there breaks phone messaging.",
+    inputSchema: {
+      type: "object",
+      properties: { path: { type: "string" }, data: {}, confirm: { type: "boolean" } },
+      required: ["path", "data", "confirm"], additionalProperties: false,
+    },
+  },
+  {
+    name: "storage_list",
+    description: "List Cloud Storage objects under a prefix, e.g. 'phone-media/'. Returns name, size, contentType, updated.",
+    inputSchema: {
+      type: "object",
+      properties: { prefix: { type: "string" }, limit: { type: "number", minimum: 1, maximum: MAX_LIMIT } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "storage_read",
+    description: "Read one Cloud Storage object: metadata always, plus a time-limited signed URL, plus the text itself when it is small and textual.",
+    inputSchema: {
+      type: "object",
+      properties: { path: { type: "string" }, maxBytes: { type: "number", minimum: 1, maximum: 200000 } },
+      required: ["path"], additionalProperties: false,
+    },
+  },
+  {
+    name: "auth_get_user",
+    description: "Look up a Firebase Auth user by uid or email. Returns profile and provider info, never a credential.",
+    inputSchema: {
+      type: "object",
+      properties: { uid: { type: "string" }, email: { type: "string" } },
+      additionalProperties: false,
+    },
+  },
 ];
 
 module.exports = async (req, res) => {
@@ -231,6 +340,15 @@ async function callTool(name, args) {
     case "list_bugs":          return toolResult(await listBugs(args));
     case "add_bug_note":       return toolResult(await addBugNote(requiredString(args, "bugId"), requiredString(args, "note")));
     case "set_bug_status":     return toolResult(await setBugStatus(requiredString(args, "bugId"), requiredString(args, "status"), args.note));
+    case "firestore_get":      return toolResult(await firestoreGet(args));
+    case "firestore_list":     return toolResult(await firestoreList(args));
+    case "firestore_set":      return toolResult(await firestoreSet(args));
+    case "firestore_delete":   return toolResult(await firestoreDelete(args));
+    case "rtdb_get":           return toolResult(await rtdbGet(args));
+    case "rtdb_set":           return toolResult(await rtdbSet(args));
+    case "storage_list":       return toolResult(await storageList(args));
+    case "storage_read":       return toolResult(await storageRead(args));
+    case "auth_get_user":      return toolResult(await authGetUser(args));
     default: throw new Error(`Unknown tool: ${name}`);
   }
 }
@@ -389,6 +507,177 @@ function normalizeShaila(id, raw = {}) {
     askerName: value.askerName || null, answer: firstText(value.answer) || null,
     answererName: value.answererName || null, parsedShaila: value.parsedShaila || null,
     linkedTaskIds: [], raw: value,
+  };
+}
+
+// ── General Firebase tools ───────────────────────────────────────────────────
+// One rule holds all of them together: READS go anywhere in the project, WRITES
+// are fenced. The fence is here, in the repo, rather than in the token — a token
+// is all-or-nothing and cannot say "not that path".
+
+const WRITE_ROOT = `users/${USER_KEY}`;
+
+function cleanPath(raw, kind) {
+  const path = String(raw || "").trim().replace(/^\/+|\/+$/g, "");
+  if (!path) throw new Error("path is required");
+  if (path.includes("..")) throw new Error("path may not contain '..'");
+  const depth = path.split("/").length;
+  if (kind === "doc" && depth % 2 !== 0) {
+    throw new Error(`'${path}' is a collection path (odd number of segments). Use firestore_list for collections.`);
+  }
+  if (kind === "collection" && depth % 2 === 0) {
+    throw new Error(`'${path}' is a document path (even number of segments). Use firestore_get for documents.`);
+  }
+  return path;
+}
+
+// Writes are confined to the owner's own data. Everything the app stores lives
+// under users/rabbidanziger, so this costs nothing real, and it means a confused
+// session cannot reach another user's tree, a config collection, or a system
+// document. Reads are deliberately NOT fenced: reading is recoverable.
+function assertWritePath(path, confirm) {
+  if (confirm !== true) throw new Error("This tool writes. Pass confirm:true once you are sure.");
+  if (path !== WRITE_ROOT && !path.startsWith(`${WRITE_ROOT}/`)) {
+    throw new Error(`Writes are limited to ${WRITE_ROOT}/**. Refused: ${path}`);
+  }
+}
+
+async function firestoreGet(args = {}) {
+  const path = cleanPath(args.path, "doc");
+  const snap = await getAdminDb().doc(path).get();
+  const out = { path, exists: snap.exists, data: snap.exists ? normalizeValue(snap.data()) : null };
+  if (args.withSubcollections) {
+    out.subcollections = (await getAdminDb().doc(path).listCollections()).map(c => c.id);
+  }
+  return out;
+}
+
+async function firestoreList(args = {}) {
+  const path = cleanPath(args.path, "collection");
+  const limit = Math.min(Math.max(Number(args.limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+  let query = getAdminDb().collection(path);
+  for (const f of Array.isArray(args.where) ? args.where : []) {
+    query = query.where(requiredString(f, "field"), requiredString(f, "op"), f.value);
+  }
+  if (args.orderBy) query = query.orderBy(args.orderBy, args.direction === "asc" ? "asc" : "desc");
+  // The field mask is applied server-side when given, so a collection of hundreds
+  // of fat documents comes back as hundreds of one-liners instead of megabytes.
+  const fields = Array.isArray(args.fields) ? args.fields.filter(Boolean) : [];
+  if (fields.length) query = query.select(...fields);
+  const snap = await query.limit(limit).get();
+  return {
+    path, count: snap.size, limit,
+    truncated: snap.size === limit,
+    documents: snap.docs.map(d => ({ id: d.id, ...normalizeValue(d.data()) })),
+  };
+}
+
+async function firestoreSet(args = {}) {
+  const path = cleanPath(args.path, "doc");
+  assertWritePath(path, args.confirm);
+  const data = args.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("data must be an object");
+  const merge = args.merge !== false;
+  await getAdminDb().doc(path).set(data, { merge });
+  return { path, ok: true, mode: merge ? "merge" : "replace", fields: Object.keys(data) };
+}
+
+async function firestoreDelete(args = {}) {
+  const path = cleanPath(args.path, "doc");
+  assertWritePath(path, args.confirm);
+  // Deleting a document does NOT delete its subcollections in Firestore — they
+  // become orphans that still cost storage and still answer queries. Refusing is
+  // better than silently leaving them: the caller can empty them first.
+  const subs = (await getAdminDb().doc(path).listCollections()).map(c => c.id);
+  if (subs.length) {
+    throw new Error(`'${path}' has subcollections (${subs.join(", ")}). Deleting the document would orphan them — delete their documents first.`);
+  }
+  await getAdminDb().doc(path).delete();
+  return { path, ok: true, deleted: true };
+}
+
+// RTDB paths that must never be written from a session: the live command queue
+// and the host presence tree. A malformed write to either stops phone messaging
+// for real, and neither is something a coding session has a reason to author.
+const RTDB_WRITE_DENY = [/^relay\/(commands|queue)(\/|$)/i, /^presence(\/|$)/i, /^hosts(\/|$)/i];
+
+async function rtdbGet(args = {}) {
+  const path = String(args.path || "").trim().replace(/^\/+|\/+$/g, "");
+  if (!path) throw new Error("path is required");
+  const ref = getAdminDatabase().ref(path);
+  if (args.shallow) {
+    // No shallow flag on the Admin SDK, so read keys and report only those. Still
+    // the right first call on an unknown node: the ANSWER stays small even when
+    // the node is not, which is what the caller is protecting against.
+    const snap = await ref.get();
+    const val = snap.val();
+    if (val && typeof val === "object") return { path, shallow: true, keys: Object.keys(val), count: Object.keys(val).length };
+    return { path, shallow: true, value: val };
+  }
+  const snap = await ref.get();
+  return { path, exists: snap.exists(), value: snap.val() };
+}
+
+async function rtdbSet(args = {}) {
+  const path = String(args.path || "").trim().replace(/^\/+|\/+$/g, "");
+  if (!path) throw new Error("path is required");
+  if (args.confirm !== true) throw new Error("This tool writes. Pass confirm:true once you are sure.");
+  if (RTDB_WRITE_DENY.some(rx => rx.test(path))) {
+    throw new Error(`'${path}' is live phone-link state and is not writable through this endpoint.`);
+  }
+  await getAdminDatabase().ref(path).set(args.data);
+  return { path, ok: true };
+}
+
+function storageBucket() {
+  const { getStorage } = require("firebase-admin/storage");
+  return getStorage(getAdminApp()).bucket(`${FIREBASE_PROJECT_ID}.firebasestorage.app`);
+}
+
+async function storageList(args = {}) {
+  const limit = Math.min(Math.max(Number(args.limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+  const [files] = await storageBucket().getFiles({ prefix: args.prefix || undefined, maxResults: limit });
+  return {
+    prefix: args.prefix || "", count: files.length, truncated: files.length === limit,
+    files: files.map(f => ({
+      name: f.name, size: Number(f.metadata?.size) || 0,
+      contentType: f.metadata?.contentType || null, updated: f.metadata?.updated || null,
+    })),
+  };
+}
+
+async function storageRead(args = {}) {
+  const path = String(args.path || "").trim().replace(/^\/+/, "");
+  if (!path) throw new Error("path is required");
+  const file = storageBucket().file(path);
+  const [exists] = await file.exists();
+  if (!exists) return { path, exists: false };
+  const [meta] = await file.getMetadata();
+  const size = Number(meta.size) || 0;
+  const contentType = meta.contentType || "";
+  const [url] = await file.getSignedUrl({ action: "read", expires: Date.now() + 60 * 60 * 1000 });
+  const out = { path, exists: true, size, contentType, updated: meta.updated || null, signedUrl: url, signedUrlExpiresInMinutes: 60 };
+  const maxBytes = Math.min(Number(args.maxBytes) || 40000, 200000);
+  const textual = /^(text\/|application\/(json|xml|javascript|x-ndjson))/i.test(contentType);
+  if (textual && size > 0 && size <= maxBytes) {
+    const [buf] = await file.download();
+    out.text = buf.toString("utf8");
+  } else if (textual) {
+    out.textOmitted = `file is ${size} bytes, over maxBytes ${maxBytes}`;
+  }
+  return out;
+}
+
+async function authGetUser(args = {}) {
+  const auth = getAdminAuth();
+  const user = args.uid ? await auth.getUser(String(args.uid).trim())
+    : args.email ? await auth.getUserByEmail(String(args.email).trim())
+    : (() => { throw new Error("pass uid or email"); })();
+  return {
+    uid: user.uid, email: user.email || null, emailVerified: user.emailVerified,
+    displayName: user.displayName || null, disabled: user.disabled,
+    created: user.metadata?.creationTime || null, lastSignIn: user.metadata?.lastSignInTime || null,
+    providers: (user.providerData || []).map(p => p.providerId),
   };
 }
 

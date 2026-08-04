@@ -30,14 +30,60 @@ tools/firestore-bridge/ask.sh list_bugs '{"status":"unresolved"}' \
                 for b in json.load(sys.stdin)["result"]["structuredContent"]["bugs"]]'
 ```
 
-Every tool the endpoint serves: `list_bugs` · `add_bug_note` · `set_bug_status` ·
-`list_tasks` · `get_task` · `search_tasks` · `list_shailos` · `get_shaila` ·
-`search_shailos` · `get_settings` · `get_meta` · `get_legacy_app_state`. Reads are
-open across app data; the ONE sanctioned write surface is the Bug Log ticket
-workflow. `set_bug_status: resolved` requires a note — by design.
+## The tools
 
-Notes are an array of `{at, text}` maps and `add_bug_note` appends for you. Do not
-hand-roll a Firestore write for this: writing `notes` directly REPLACES the array.
+**Named tools** — one per known shape, the everyday ones:
+`list_bugs` · `add_bug_note` · `set_bug_status` · `list_tasks` · `get_task` ·
+`search_tasks` · `list_shailos` · `get_shaila` · `search_shailos` · `get_settings` ·
+`get_meta` · `get_legacy_app_state`.
+
+`set_bug_status: resolved` requires a note — by design. Notes are an array of
+`{at, text}` maps and `add_bug_note` appends for you; a raw Firestore write to
+`notes` REPLACES the array, so use the tool.
+
+**General tools** — anything the named ones do not cover:
+
+| Tool | Does |
+|---|---|
+| `firestore_get` | one document by full path; `withSubcollections` lists its child collections |
+| `firestore_list` | a collection, with `where` / `orderBy` / `fields` / `limit` |
+| `firestore_set` | write a document (merge by default) |
+| `firestore_delete` | delete a document |
+| `rtdb_get` | Realtime Database — the phone relay queue, host heartbeats, presence |
+| `rtdb_set` | write an RTDB path |
+| `storage_list` | Cloud Storage objects under a prefix, e.g. `phone-media/` |
+| `storage_read` | one object: metadata, a 1-hour signed URL, and the text if small |
+| `auth_get_user` | a Firebase Auth user by uid or email |
+
+```bash
+tools/firestore-bridge/ask.sh firestore_get  '{"path":"users/rabbidanziger/config/settings"}'
+tools/firestore-bridge/ask.sh firestore_list '{"path":"users/rabbidanziger/bugs","fields":["status","summary"],"limit":30}'
+tools/firestore-bridge/ask.sh rtdb_get       '{"path":"relay","shallow":true}'
+tools/firestore-bridge/ask.sh storage_list   '{"prefix":"phone-media/","limit":20}'
+```
+
+### The rules the write tools enforce
+
+Reads go anywhere in the project. Writes do not, and the fence is in
+`apps/web/functions/mcp.js` where it can be read and changed, not in the token —
+a token is all-or-nothing and cannot say "not that path".
+
+- Every write tool needs `confirm: true`. There is no way to write by accident.
+- Firestore writes are confined to `users/rabbidanziger/**`. Everything the app
+  stores is under there, so this costs nothing and keeps a confused session out of
+  other trees.
+- `firestore_delete` refuses a document that has subcollections. Firestore does not
+  delete children with the parent, and silently orphaning them is worse than a
+  refusal — empty the children first.
+- `rtdb_set` refuses `relay/commands`, `relay/queue`, `presence/*` and `hosts/*`.
+  That is live phone-link state; a malformed write there stops messaging for real.
+- On a big collection, pass `fields` — the mask is applied server-side, so hundreds
+  of fat documents come back as hundreds of one-liners. Same for `rtdb_get` with
+  `shallow: true` on a node whose size you do not know.
+
+Anything genuinely outside these limits — deleting a whole tree, touching another
+project, rotating credentials — is still a job for the owner's PC, where the admin
+key lives. That is deliberate.
 
 ## What the script does, and why it is worth knowing
 
@@ -76,7 +122,7 @@ only missing piece is the token.
 1. In the Claude Code web environment settings, add an environment variable
    `MCP_READ_TOKEN` with the same value as the repo secret of that name.
 2. That alone puts `ask.sh` on the fast road — nothing else to change.
-3. Optionally also commit a `.mcp.json` at the repo root, and the twelve tools
+3. Optionally also commit a `.mcp.json` at the repo root, and all twenty-one tools
    appear as native tools in every session, no script at all:
 
 ```json
@@ -112,23 +158,28 @@ environment's egress policy — every failure above is an auth failure. That ref
 the whole problem: this sandbox does not need a tunnel or a proxy, it needs one
 secret, and the cheapest safe secret is the scoped MCP token above.
 
+The token now carries write power, so treat it like a password: if it ever leaks,
+rotate the `MCP_READ_TOKEN` repo secret and the matching environment variable
+together, and the old one stops working immediately.
+
 ### Firebase options, honestly compared
 
 | Option | Reach | Risk | Verdict |
 |---|---|---|---|
-| **`MCP_READ_TOKEN` env var** | Read all app data; write ONLY bug notes/status | Low — the endpoint's own code is the boundary, and it is in this repo | **Do this.** Covers every buglog session, which is most of them |
+| **`MCP_READ_TOKEN` env var** | Read anything in the project; write Firestore under `users/rabbidanziger/**`, RTDB outside the live relay paths | Moderate, and bounded by `mcp.js` — which is in this repo and reviewable | **Do this.** Since 4.114.19 it covers Firestore, RTDB, Storage and Auth lookups, not just the buglog |
 | Admin service-account JSON in the env | Everything: Firestore, RTDB, Storage, Auth | High — any session, including a confused one, can wipe live data (see `HANDOFF.md` §9) | Only for a specific migration, added and removed around it |
 | Workload Identity Federation | Same as admin | — | Not available: WIF needs the OIDC token of an Actions run, which a sandbox has no way to mint. This is why the deploy workflow can authenticate and a session cannot |
 | A scoped Firebase user + rules | Whatever the rules allow | Medium; needs rules work | Worth it only if sessions start needing RTDB/Storage |
 
-### Known gaps in the MCP surface
+### What is still out of reach
 
-`mcp.js` covers Firestore app data only. Not exposed, and therefore still
-PC-or-Actions territory: the Realtime Database (phone relay queue, host
-heartbeats), Cloud Storage (`phone-media/*`), and Firebase Auth. If a session needs
-one of those regularly, the right move is a new tool in `apps/web/functions/mcp.js`
-with a read-only shape, not a broader credential — that file is the boundary and
-every addition to it is reviewable in this repo.
+Firestore, the Realtime Database, Cloud Storage and Auth lookups are all covered as
+of 4.114.19. What is not, and stays PC-only on purpose: deleting whole trees,
+Auth writes (creating, disabling or deleting users), anything in the RabbiMetrics
+project, and credential or rules changes. Those need the admin key, which lives on
+the owner's PC. If a session needs something new regularly, add a tool to
+`apps/web/functions/mcp.js` — that file is the boundary, and every addition to it
+is reviewable here.
 
 ### Connectors already present in a cloud session
 
