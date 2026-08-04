@@ -1984,9 +1984,16 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     const rows = [...(gmailMessages || [])];
     return rows.sort((a, b) => (mailIsUnread(b) ? 1 : 0) - (mailIsUnread(a) ? 1 : 0));
   }, [gmailMessages]);
+  // Priority order, but pins outrank priority. The needs-action sort used to run
+  // on its own and silently undid the pinned-first ordering of primaryTaskQueue —
+  // a "Now" unpinned task jumped a pinned "Later" one, which is exactly the
+  // symptom in ticket s0wx0jmnqGL5C4ESV4mk ("list starts with direct donations").
+  // Pins are user-locked everywhere else in the app (01-core.js optimizeTasks
+  // never reorders across them), so this card must not be the one place they are
+  // advisory. Sort by weight first, then lift the pinned block on top.
   const actionTasks = useMemo(() => {
     const w = t => Number((priorities.find(p => p.id === t.priority) || {}).weight || 0);
-    return [...primaryTaskQueue].sort((a, b) => w(b) - w(a));
+    return orderPinnedFirst([...primaryTaskQueue].sort((a, b) => w(b) - w(a)));
   }, [primaryTaskQueue, priorities]);
   const actionShailos = useMemo(() => {
     const waiting = s => (s.status === "get_back" || s.isGetBackStep) ? 1 : 0;
