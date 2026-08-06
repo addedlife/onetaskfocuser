@@ -26,6 +26,10 @@ read `BRIEF.txt`, `AGENTS.md`, or `docs/ops/CONTEXT_INDEX.md` — they are point
   It picks the fast or slow road by itself. `docs/ops/CLOUD_ACCESS.md` is the whole
   story — read it only if the command fails.
   On the owner's PC the admin key is right there; use it directly and skip the script.
+- **Every buglog note opens in plain English.** First a short paragraph the owner can read
+  without knowing what a component is: what was broken, what he will see now, what is still
+  open. The technical account — file names, mechanism, why it happened — comes after it, in
+  its own paragraph. Never lead with jargon.
 - Never dump `users/rabbidanziger/bugs` — it is hundreds of documents. `list_bugs` is
   already the safe read. Re-check open tickets before ending any session that did
   buglog work; the owner files bugs live.

@@ -796,9 +796,14 @@ const Store = {
   },
 
   // Patch any subset of fields (e.g. {status} or {type}); always re-stamps updatedAt.
+  // RESOLVES TO TRUE/FALSE — it must never swallow a failure. It used to log a
+  // warning and return, so a ticket the owner marked "Resolved" while offline, or
+  // while a rules/permission hiccup rejected the write, simply stayed unresolved
+  // with no message at all: the row snapped back and the ticket "wouldn't archive"
+  // (owner ticket OM4TfqTFx68b). The caller now says so out loud.
   async updateBug(id, patch = {}) {
     const col = this.bugsCol();
-    if (!col || !id) return;
+    if (!col || !id) return false;
     try {
       await col.doc(id).update({
         ...this._clean(patch),
@@ -806,8 +811,10 @@ const Store = {
       });
       console.log("[Store] Updated bug:", id, patch);
       this._syncOpenTickets();
+      return true;
     } catch (e) {
       console.warn("[Store] updateBug failed:", e);
+      return false;
     }
   },
 

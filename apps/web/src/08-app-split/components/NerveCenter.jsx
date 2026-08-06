@@ -63,6 +63,15 @@ function softBorder(color, alpha) {
 
 const MIN_COLLAPSED_TASKS = 5;
 const TIMELINE_PX_HR = 60; // 60 px/hour in the daily timeline — Google Calendar day-view density
+// Floor for any calendar scroller (live timeline and the card agenda). A `flex: 1 1 0`
+// box with `minHeight: 0` measures ZERO whenever its column parent has no definite
+// height — which is exactly what happens in the card grid, where the card body is
+// `flex: 0 0 auto` (headerScrolls) and the wrapper's `height: 100%` has nothing to
+// resolve against. Chrome papered over it in some layouts, Safari did not, and the
+// Live-time view rendered as an empty box (owner: "Calendar flowing time of day mode
+// is blank"). A real floor makes the view impossible to collapse; `flex: 1 1 0` still
+// grows normally wherever the parent DOES have a height, so no good layout changes.
+const CAL_SCROLL_MIN_H = 260;
 
 // ── "Calm rows" prototype — ?ncproto=1 to enable, ?ncproto=0 to disable ──────
 // Opt-in declutter experiment (owner 7/21: cards read as "a sea of line items").
@@ -734,7 +743,7 @@ function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
           ))}
         </div>
       )}
-      <div ref={scrollRef} style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
+      <div ref={scrollRef} style={{ flex: "1 1 0", minHeight: CAL_SCROLL_MIN_H, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
         <div style={{ position: "relative", height: TOTAL_H }}>
           {/* Event column — events positioned absolutely by time */}
           <div style={{ position: "absolute", left: LABEL_W, right: 0, top: 0, bottom: 0 }}>
@@ -3812,7 +3821,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               ) : calCardView === "timeline" ? (
                 <CalendarTimeline calendarRows={ncQueues.calendarRaw} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
               ) : (
-                <div data-agenda-scroll="true" style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden" }}>
+                <div data-agenda-scroll="true" style={{ flex:1, minHeight:CAL_SCROLL_MIN_H, overflowY:"auto", overflowX:"hidden" }}>
                   {ncLists.calendarToday.length === 0 && ncLists.calendarPast.length === 0 && ncLists.calendarTomorrow.length === 0 ? emptyMsg("No events today.") : (() => {
                     const cardListStyle = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
                     const pastRows     = ncLists.calendarPast;

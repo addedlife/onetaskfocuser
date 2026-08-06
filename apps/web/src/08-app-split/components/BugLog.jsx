@@ -72,6 +72,7 @@ export function BugLog({ T, railVisible = true }) {
   const [editId, setEditId] = React.useState(null);   // row in inline-edit mode
   const [editText, setEditText] = React.useState('');  // working copy of that row's text
   const [copied, setCopied] = React.useState(false);
+  const [statusError, setStatusError] = React.useState(null); // a status change the server refused
   const [hot, setHot]       = React.useState(false);   // FAB hover/focus → full opacity
 
   // FAB position: null = anchored to a screen edge via CSS (robust — no JS pixel
@@ -451,6 +452,16 @@ export function BugLog({ T, railVisible = true }) {
 
           {/* Body — scrolls internally so nothing overflows the rounded card */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: SP.md, padding: SP.md, overflowY: 'auto', minHeight: 0, flex: '1 1 auto' }}>
+            {statusError && (
+              <div role="alert" onClick={() => setStatusError(null)} style={{
+                display: 'flex', alignItems: 'center', gap: SP.sm, padding: '8px 12px', cursor: 'pointer',
+                borderRadius: RADIUS.md, background: `color-mix(in srgb, ${C.danger} 14%, ${C.bg})`,
+                color: C.text, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small,
+              }}>
+                {sym('error', 18, C.danger)}
+                <span style={{ flex: 1, minWidth: 0 }}>{statusError}</span>
+              </div>
+            )}
             {/* Quick add */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm }}>
               <OutlinedTextField
@@ -588,7 +599,14 @@ export function BugLog({ T, railVisible = true }) {
                           positioning="popover"
                         >
                           {STATUSES.map(st => (
-                            <MenuItem key={st.id} onClick={() => { Store.updateBug(b.id, { status: st.id }); setMenuId(null); }}>
+                            <MenuItem key={st.id} onClick={async () => {
+                              setMenuId(null);
+                              setStatusError(null);
+                              const ok = await Store.updateBug(b.id, { status: st.id });
+                              // Without this the row just snaps back to its old status and the
+                              // ticket looks like it "won't archive" (owner ticket OM4TfqTFx68b).
+                              if (!ok) setStatusError(`Couldn't set that ticket to "${st.label}" — the change did not save. Check your connection and try again.`);
+                            }}>
                               <span slot="start" className="material-symbols-rounded" style={{ color: st.color }}>{st.icon}</span>
                               <div slot="headline">{st.label}</div>
                             </MenuItem>
