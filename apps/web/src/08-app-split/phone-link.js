@@ -140,6 +140,16 @@ export function messageListSignature(list) {
 //   hasData         — messages or calls are on screen (for wording only)
 //   owner           — normalized phone-relay/owner doc (phone-host-control.js)
 //   relayReceivedAt — state-doc stamp; legacy liveness before owner doc exists
+//   lastHandshakeMs — last moment the host actually HELD the phone (see below)
+//
+// Heartbeat ≠ handshake. The host renews `t` every ~20 s just by being alive,
+// whether or not its Bluetooth link to the phone is up. So when the phone drops
+// but the host keeps running, `now - t` is ~20 s and the old status line read
+// "Offline — last seen 21s ago" while the phone had in fact been unreachable
+// for hours (owner ticket XpoyW6GB: "that's the time the screen was open").
+// The handshake stamp is the last `t` observed while `connected` was true —
+// the real last successful contact with the phone. Surfaces track it (they can
+// persist it across reloads); this module stays pure and just reports it.
 //
 // States:
 //   connected  — live heartbeat, host holds the phone
@@ -154,12 +164,23 @@ export function derivePhoneLinkState({
   hasData = false,
   owner = { preferred: PREFERRED_DEFAULT, host: '', t: 0, connected: false, present: false, preferredAtMs: 0, hosts: {} },
   relayReceivedAt = 0,
+  lastHandshakeMs = 0,
 } = {}) {
   const heartbeatMs = owner.present ? owner.t : (Number(relayReceivedAt) || 0);
   const liveWindowMs = owner.present ? HEARTBEAT_LIVE_WINDOW_MS : STATE_FALLBACK_WINDOW_MS;
   const ownerSaysConnected = owner.present ? owner.connected : true;
   const ageMs = heartbeatMs > 0 ? Math.max(0, now - heartbeatMs) : 0;
   const stale = usingRelay && heartbeatMs > 0 && (ageMs >= liveWindowMs || !ownerSaysConnected);
+  // The host is checking in on time but says it does not hold the phone. The
+  // heartbeat age is therefore a measure of the HOST, not of the phone, and
+  // must never be shown as "last seen".
+  const hostAliveNoPhone = usingRelay && owner.present && !ownerSaysConnected && ageMs < liveWindowMs;
+  // Last real contact with the phone. Prefer a tracked handshake; a live link
+  // is a handshake happening right now. 0 = never observed by this client.
+  const handshakeMs = ownerSaysConnected && !stale
+    ? heartbeatMs
+    : (Number(lastHandshakeMs) || 0);
+  const handshakeAgeMs = handshakeMs > 0 ? Math.max(0, now - handshakeMs) : 0;
   // On the loopback path liveness is simply "the fetch just worked".
   const live = usingRelay ? (statusOnline && heartbeatMs > 0 && !stale) : statusOnline;
 
@@ -202,6 +223,9 @@ export function derivePhoneLinkState({
     auto,
     heartbeatMs,
     ageMs,
+    hostAliveNoPhone,
+    handshakeMs,
+    handshakeAgeMs,
     hasData,
     activeHostId,
     activeHostLabel: HOST_LABEL[activeHostId] || '',
@@ -233,7 +257,23 @@ export function describePhoneLink(link, { deviceName = '', hostFallbackLabel = '
         tone: 'muted',
         showReconnect: false,
       };
-    case 'offline':
+    case 'offline': {
+      // Which age is honest here depends on WHY the link is down. A dead host
+      // means the heartbeat age is also the contact age. A live host that has
+      // lost the phone means the heartbeat age is meaningless — use the tracked
+      // handshake, and if this client never saw a good link, show no number at
+      // all rather than a reassuring wrong one (owner ticket XpoyW6GB).
+      const contactAge = link.hostAliveNoPhone
+        ? (link.handshakeMs > 0 ? formatAgeShort(link.handshakeAgeMs) : '')
+        : formatAgeShort(link.ageMs);
+      const since = contactAge ? ` — last contact with the phone ${contactAge} ago` : '';
+      if (link.hostAliveNoPhone) {
+        return {
+          label: `Offline — ${hostLabel || 'the host'} is running but has no link to the phone${since}`,
+          tone: 'warn',
+          showReconnect: true,
+        };
+      }
       return {
         label: link.hasData
           ? `Offline — showing texts & calls from ${formatAgeShort(link.ageMs)} ago`
@@ -241,6 +281,7 @@ export function describePhoneLink(link, { deviceName = '', hostFallbackLabel = '
         tone: 'warn',
         showReconnect: true,
       };
+    }
     case 'connecting':
       return { label: 'Connecting…', tone: 'muted', showReconnect: false };
     default: // no-host

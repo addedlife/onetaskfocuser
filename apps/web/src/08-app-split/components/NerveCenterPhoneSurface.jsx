@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cleanTheme, DUR, EASE, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { ActionBtn, AssistChip, IconBtn, ListItem, TextField, denseListVars } from '../m3.jsx';
 import { db } from '../../01-core.js';
-import { subscribeOwner } from '../phone-host-control.js';
+import { subscribeOwner, rememberHandshake, lastHandshakeMs } from '../phone-host-control.js';
 import { derivePhoneLinkState, describePhoneLink, formatAgeShort, messageListSignature, mergeMessageFeeds, mergeCallFeeds } from '../phone-link.js';
 import {
   addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
@@ -25,6 +25,15 @@ const CALL_SUPPRESS_MS = 90000;
 // Well past any call the owner actually takes, so a real long call is never cut off.
 const CALL_PHANTOM_AFTER_MS = 2 * 60 * 60 * 1000;
 const CALL_SEEN_KEY = 'shamash_phone_call_first_seen';
+// How long a queued command waits for the host to acknowledge it. 25 s was
+// landing just short of a real send's confirmation (owner ticket PZw6eQft:
+// "25 secs always just misses the sent confirm"), so every good send reported
+// as a failure and the command was withdrawn out from under a host that was
+// mid-send. 35 s clears that margin. Both waits are named once here so the
+// numbers in the log text cannot drift away from the numbers in the code.
+const ACK_WAIT_MS = 35000;
+const LATE_ACK_WAIT_MS = 65000;
+const secs = ms => Math.round(ms / 1000);
 // All liveness/staleness windows and age labels live in phone-link.js — the
 // shared state machine both phone surfaces derive from.
 
@@ -623,7 +632,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // Owner control doc — one small doc, one listener. Feeds the plain-language
   // status line (Connected/Connecting/Offline) and the tablet-vs-PC label.
   useEffect(() => {
-    const unsub = subscribeOwner(setOwner);
+    const unsub = subscribeOwner(next => {
+      // Every snapshot with connected:true is a real handshake with the phone.
+      // Recorded here (not in the status line) so the offline age survives a
+      // reload and never falls back to the host's own heartbeat.
+      rememberHandshake(next);
+      setOwner(next);
+    });
     return () => { try { unsub && unsub(); } catch (_) {} };
   }, []);
 
@@ -718,7 +733,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     // mailbox at all. State pushes and the mailbox authenticate separately, so a
     // host that is unapproved or key-rejected still looks perfectly healthy here
     // while nothing it is sent ever runs (owner ticket 7/29). Refuse up front
-    // with the real reason instead of buying a 25 s wait and a vague verdict.
+    // with the real reason instead of buying the full ack wait and a vague verdict.
     const health = commandChannelHealth(statusRef.current);
     if (health.known && !health.ok) {
       step("the phone host says it cannot receive commands", "fail", health.reason);
@@ -759,10 +774,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       const queued = await res.json().catch(() => ({}));
       if (queued?.id) {
         step("queued in the cloud mailbox", "ok", `command id ${queued.id}`);
-        step("waiting for the host's acknowledgement (up to 25s)");
+        step(`waiting for the host's acknowledgement (up to ${secs(ACK_WAIT_MS)}s)`);
         // Await the host acknowledgement — it rides the state pushes we already
-        // receive. No ack within 25 s means no live host accepted the command.
-        const ack = await waitForAck(queued.id, 25000);
+        // receive. No ack in this window means no live host accepted the command.
+        const ack = await waitForAck(queued.id, ACK_WAIT_MS);
         await refresh();
         if (ack && !ack.ok) {
           const msg = ack.error || "The phone host could not run the command.";
@@ -771,9 +786,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           return done(false, msg);
         }
         if (!ack) {
-          step("no acknowledgement in 25s — the host never confirmed", "warn",
+          step(`no acknowledgement in ${secs(ACK_WAIT_MS)}s — the host never confirmed`, "warn",
             "the host acks through the state blob it pushes; either it never drained the mailbox, or it ran the command and its state push is not landing");
-          // No ack in 25 s. WITHDRAW the command before reporting failure —
+          // No ack in that window. WITHDRAW the command before reporting failure —
           // "failed" must mean it can never fire later. Before 4.91.1 the
           // command stayed queued for up to 10 minutes, so a host reconnecting
           // inside that window sent every "failed" retry too (owner incident
@@ -799,8 +814,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           // Not in the mailbox = a host already took it and may be mid-send.
           // Never claim failure while that's possible — wait out a slow ack.
           step("already gone from the mailbox — a host DID take it", "warn",
-            "waiting a further 65s for a slow acknowledgement rather than reporting a failure that may still deliver");
-          const lateAck = await waitForAck(queued.id, 65000);
+            `waiting a further ${secs(LATE_ACK_WAIT_MS)}s for a slow acknowledgement rather than reporting a failure that may still deliver`);
+          const lateAck = await waitForAck(queued.id, LATE_ACK_WAIT_MS);
           await refresh();
           if (lateAck && lateAck.ok) {
             step("late acknowledgement arrived — the host ran it", "ok");
@@ -809,7 +824,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           }
           const msg = lateAck?.error
             || "The host took this command but never confirmed it ran. It may or may not have gone out — check the thread before resending.";
-          step(lateAck ? "late acknowledgement says it FAILED" : "no acknowledgement after 90s total", "fail",
+          step(lateAck ? "late acknowledgement says it FAILED" : `no acknowledgement after ${secs(ACK_WAIT_MS + LATE_ACK_WAIT_MS)}s total`, "fail",
             lateAck ? (lateAck.error || "") : "the host drained the command but its state push never carried the ack back");
           fail(msg);
           return done(false, msg);
@@ -926,6 +941,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     hasData: hasFeedData,
     owner,
     relayReceivedAt,
+    lastHandshakeMs: lastHandshakeMs(owner.host),
   });
   const relayStale = link.stale;
   const phoneLinkLive = link.live;

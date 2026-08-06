@@ -90,6 +90,44 @@ export function setPreferredHost(preferred) {
     .catch(err => { console.warn('[phone-host-control] setPreferredHost failed:', err); return false; });
 }
 
+// ── Last successful handshake with the PHONE ────────────────────────────────
+// The owner doc carries no "when did the link last work" field — `t` is the
+// host's own heartbeat, which keeps ticking while the phone is unreachable, so
+// an offline status line built on it read "last contact 21s ago" for a phone
+// that had been gone for hours (owner ticket XpoyW6GB). Every owner snapshot
+// where `connected` is true IS a successful handshake, so we record the newest
+// one we see and persist it — a reload should not reset the owner's sense of
+// how long the phone has been gone. Per host id, because "the PC last had it an
+// hour ago" and "the tablet last had it a minute ago" are different facts.
+const HANDSHAKE_KEY = 'shamash_phone_last_handshake';
+
+function readHandshakes() {
+  try { return JSON.parse(localStorage.getItem(HANDSHAKE_KEY) || '{}') || {}; }
+  catch { return {}; }
+}
+
+// Record a handshake if this snapshot is one. Returns the stored map so callers
+// can read and write in a single pass.
+export function rememberHandshake(owner) {
+  const map = readHandshakes();
+  const id = owner?.host || '';
+  const t = Number(owner?.t) || 0;
+  if (owner?.connected && id && t > (Number(map[id]) || 0)) {
+    map[id] = t;
+    try { localStorage.setItem(HANDSHAKE_KEY, JSON.stringify(map)); } catch {}
+  }
+  return map;
+}
+
+// The newest handshake we have ever seen for a host (0 = never). With no host
+// named, answer with the newest across all of them — the phone was last
+// reachable then, whoever was holding it.
+export function lastHandshakeMs(hostId = '') {
+  const map = readHandshakes();
+  if (hostId) return Number(map[hostId]) || 0;
+  return Object.values(map).reduce((max, v) => Math.max(max, Number(v) || 0), 0);
+}
+
 // Is the active host's heartbeat fresh right now? `nowMs` is passed in so a UI
 // that ticks a clock re-evaluates staleness without a new snapshot.
 export function ownerIsLive(owner, nowMs = Date.now()) {

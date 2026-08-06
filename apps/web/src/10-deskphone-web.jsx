@@ -10,7 +10,7 @@ import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMes
 // The two real M3 controls this surface uses (call-log search). Everything else
 // here predates the GM3 rule and is raw markup on purpose — a native-parity clone.
 import { TextField as DpTextField, IconButton as DpIconButton } from './08-app-split/m3.jsx';
-import { subscribeOwner } from './08-app-split/phone-host-control.js';
+import { subscribeOwner, rememberHandshake, lastHandshakeMs } from './08-app-split/phone-host-control.js';
 import { commandChannelHealth } from './08-app-split/utils/relay-health.js';
 import { hydrateMessagesWithMedia } from './08-app-split/utils/phone-media.js';
 import { detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun } from './08-app-split/process-log.js';
@@ -26,7 +26,10 @@ const DEFAULT_HOST = "http://127.0.0.1:8765";
 const RELAY_BASE = "/api/phone-relay";
 // How long a queued cloud command may wait for the active host's ack before the
 // UI calls it failed (host drain tick ≈4 s + state push ≈3 s + relay latency).
-const CLOUD_ACK_TIMEOUT_MS = 30000;
+// 30 s was landing just short of a real send's confirmation on a slow link
+// (owner ticket PZw6eQft), so a good send reported as failed. Matches the
+// NerveCenter phone surface's ACK_WAIT_MS.
+const CLOUD_ACK_TIMEOUT_MS = 35000;
 // Liveness windows + status wording come from the shared phone-link.js state
 // machine — this page and the NerveCenter card can no longer disagree.
 
@@ -6312,7 +6315,7 @@ export function DeskPhoneWebPanel({
   // machine so this page and the NerveCenter card read one liveness truth.
   const [owner, setOwner] = useState({ preferred: 'tablet', host: '', t: 0, connected: false, present: false, hosts: {} });
   useEffect(() => {
-    const unsub = subscribeOwner(setOwner);
+    const unsub = subscribeOwner(next => { rememberHandshake(next); setOwner(next); });
     return () => { try { unsub && unsub(); } catch {} };
   }, []);
   // Re-derive staleness on a clock even with no new data.
@@ -6540,6 +6543,7 @@ export function DeskPhoneWebPanel({
     hasData: hasFeedData,
     owner,
     relayReceivedAt: relayStamp,
+    lastHandshakeMs: lastHandshakeMs(owner.host),
   });
   const relayStale = link.stale;
   // The relay callbacks below have stable ([]) deps but need to know which host

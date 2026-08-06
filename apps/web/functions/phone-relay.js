@@ -243,7 +243,7 @@ module.exports = async (req, res) => {
   }
 
   // ── POST cancel (webapp → cloud, Firebase auth required) ─────────────────
-  // The webapp gives up waiting for a command ack after ~25 s and tells the
+  // The webapp gives up waiting for a command ack after ~35 s and tells the
   // user it failed — but the command itself used to stay live in the mailbox
   // for its full TTL (10 min for /send), so a host reconnecting inside that
   // window fired every "failed" send anyway (owner incident 7/19: four /send

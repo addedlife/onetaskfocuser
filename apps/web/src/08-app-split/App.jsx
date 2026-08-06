@@ -62,6 +62,48 @@ const GOOGLE_OAUTH_SCOPES = [
 const EMAIL_SUMMARY_SESSION_KEY = 'ot_email_summary_v3';
 const EMAIL_SUMMARY_CACHE_MAX = 300;
 
+// Backoff for emails the summarizer never manages to summarize (owner ticket
+// C6nnkYQi: 21 email-summary calls in a day against a ~5.7 average). Only
+// SUCCESS was ever cached, so an email the model skipped — a truncated output
+// array, a gateway error, an attachment-only mail — stayed a cache miss and was
+// re-sent on every focus and every Gmail push, forever, at full price. A miss
+// that fails now is likely to fail again, so each failure parks that email for
+// exponentially longer; a later success clears the record outright.
+const EMAIL_SUMMARY_RETRY_BASE_MS = 10 * 60 * 1000;   // 10 min after the 1st failure
+const EMAIL_SUMMARY_RETRY_MAX_MS = 24 * 60 * 60 * 1000; // never park longer than a day
+
+function readEmailSummaryRecords() {
+  try { return JSON.parse(localStorage.getItem(EMAIL_SUMMARY_SESSION_KEY) || "{}") || {}; }
+  catch { return {}; }
+}
+
+// True while an email is serving out a failure backoff — treat it as "not worth
+// asking about right now", not as a cache hit (it still renders without a
+// summary, exactly as it does today).
+function emailSummaryParked(records, hash, now = Date.now()) {
+  const rec = records[hash];
+  return !!rec && typeof rec === "object" && !rec.s && Number(rec.n || 0) > now;
+}
+
+// Record that these content hashes came back without a summary.
+function noteEmailSummaryFailures(hashes) {
+  if (!hashes.length) return;
+  try {
+    const raw = readEmailSummaryRecords();
+    const now = Date.now();
+    for (const h of hashes) {
+      const prev = raw[h];
+      // A previously summarized email that suddenly fails keeps its summary —
+      // only misses get a failure record.
+      if (prev && typeof prev === "object" && prev.s) continue;
+      const fails = Number(prev?.f || 0) + 1;
+      const wait = Math.min(EMAIL_SUMMARY_RETRY_BASE_MS * 2 ** (fails - 1), EMAIL_SUMMARY_RETRY_MAX_MS);
+      raw[h] = { f: fails, n: now + wait, t: now };
+    }
+    localStorage.setItem(EMAIL_SUMMARY_SESSION_KEY, JSON.stringify(raw));
+  } catch {}
+}
+
 function emailContentHash(m) {
   const subj = m?.payload?.headers?.find(h => h.name === "Subject")?.value || "";
   const snip = (m.snippet || "").slice(0, 120);
@@ -1155,7 +1197,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   async function applyEmailSummaries(msgs) {
     if (!Array.isArray(msgs) || msgs.length === 0) return;
     const cache = readEmailSummarySession();
-    const needsAI = msgs.filter(m => !cache[emailContentHash(m)]);
+    const records = readEmailSummaryRecords();
+    // A cache miss is only worth an AI call if it isn't parked in failure
+    // backoff — otherwise the same unsummarizable emails buy a fresh call on
+    // every refresh (owner ticket C6nnkYQi).
+    const needsAI = msgs.filter(m => {
+      const h = emailContentHash(m);
+      return !cache[h] && !emailSummaryParked(records, h);
+    });
     if (needsAI.length === 0) return;
     // ONE summarizer call per distinct set of uncached emails, across every
     // tab AND device (owner ticket 7/19: three near-concurrent summarizer
@@ -1198,16 +1247,26 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       });
       const job = await runAIJob("dashboard.email_summaries.v1", { emails }, aiOpts || {});
       const summaries = Array.isArray(job?.output) ? job.output : null;
-      if (!summaries) return;
+      if (!summaries) {
+        noteEmailSummaryFailures(needsAI.map(m => emailContentHash(m)));
+        releaseContentClaim('email-summaries', contentKey);
+        return;
+      }
       const newCache = {};
       const byId = new Map();
+      const missed = [];
       needsAI.forEach((m, i) => {
         if (m?.id && typeof summaries[i] === "string") {
           const s = summaries[i].replace(/^"|"$/g, "");
           byId.set(m.id, s);
           newCache[emailContentHash(m)] = s;
+        } else {
+          // The model returned a short or ragged array — these emails were paid
+          // for and got nothing. Park them rather than re-asking every refresh.
+          missed.push(emailContentHash(m));
         }
       });
+      noteEmailSummaryFailures(missed);
       if (!byId.size) return;
       writeEmailSummarySession(newCache);
       // Publish hash-keyed summaries so the OTHER tabs/devices that lost the
@@ -1220,7 +1279,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       console.warn('[Google] AI email summary failed:', e.message);
       // The call never produced summaries — release the claim so a later
       // refresh may retry, instead of these emails staying unsummarized until
-      // the inbox changes.
+      // the inbox changes. The retry is now on a backoff: releasing the claim
+      // alone let every focus event buy another failing call.
+      noteEmailSummaryFailures(needsAI.map(m => emailContentHash(m)));
       releaseContentClaim('email-summaries', contentKey);
     } finally {
       if (emailSummaryFlightKey === contentKey) emailSummaryFlightKey = null;

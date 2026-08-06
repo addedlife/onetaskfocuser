@@ -44,6 +44,53 @@ test('host heartbeating but BT disconnected = offline (no false green)', () => {
   assert.equal(link.state, 'offline');
 });
 
+// Owner ticket XpoyW6GB: the host's own heartbeat kept ticking while the phone
+// was unreachable, so an offline line read "last contact 21s ago" for a phone
+// that had been gone for hours. The heartbeat age must never be presented as
+// contact with the phone once the host admits it isn't holding it.
+test('host alive but phone gone: heartbeat age is NOT the handshake age', () => {
+  const link = derivePhoneLinkState({
+    now: NOW, usingRelay: true, statusOnline: true, hasData: true,
+    owner: owner({ present: true, host: 'android', t: NOW - 21_000, connected: false }),
+    lastHandshakeMs: NOW - 3 * 3600_000,
+  });
+  assert.equal(link.state, 'offline');
+  assert.equal(link.hostAliveNoPhone, true);
+  assert.equal(link.ageMs, 21_000);
+  assert.equal(link.handshakeAgeMs, 3 * 3600_000);
+  assert.match(describePhoneLink(link).label, /last contact with the phone 3h ago/);
+});
+
+test('host alive, phone gone, no handshake ever seen: no number at all', () => {
+  const link = derivePhoneLinkState({
+    now: NOW, usingRelay: true, statusOnline: true, hasData: true,
+    owner: owner({ present: true, host: 'windows', t: NOW - 21_000, connected: false }),
+  });
+  assert.equal(link.handshakeMs, 0);
+  const label = describePhoneLink(link).label;
+  assert.match(label, /PC is running but has no link to the phone/);
+  assert.doesNotMatch(label, /21s|ago/);
+});
+
+test('a live link IS a handshake — no tracked stamp needed', () => {
+  const link = derivePhoneLinkState({
+    now: NOW, usingRelay: true, statusOnline: true, hasData: true,
+    owner: owner({ present: true, host: 'android', t: NOW - 5_000, connected: true }),
+  });
+  assert.equal(link.hostAliveNoPhone, false);
+  assert.equal(link.handshakeMs, NOW - 5_000);
+});
+
+test('dead host: offline age stays the heartbeat age (unchanged wording)', () => {
+  const link = derivePhoneLinkState({
+    now: NOW, usingRelay: true, statusOnline: true, hasData: true,
+    owner: owner({ present: true, host: 'android', t: NOW - 4 * 3600_000, connected: true }),
+    lastHandshakeMs: NOW - 4 * 3600_000,
+  });
+  assert.equal(link.hostAliveNoPhone, false);
+  assert.equal(describePhoneLink(link).label, 'Offline — showing texts & calls from 4h ago');
+});
+
 test('owner prefers PC while tablet still holds = switching', () => {
   const link = derivePhoneLinkState({
     now: NOW, usingRelay: true, statusOnline: true, hasData: true,
