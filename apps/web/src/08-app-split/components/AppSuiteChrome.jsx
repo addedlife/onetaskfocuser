@@ -401,8 +401,26 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
         backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
         borderRight: `1px solid ${C.divider}`,
         transition: `width ${DUR.base} ${EASE.standard}`,
+        // Last-resort scroll only. The inner scroll region below absorbs every
+        // realistic shortfall, so at normal window heights scrollHeight ===
+        // clientHeight and nothing scrolls; on an absurdly short window the rail
+        // scrolls rather than clipping the footer out of reach.
         overflowY: "auto", overflowX: "hidden",
         ...mdVars,
+      }}>
+
+      {/* Destinations scroll; the utility cluster below does NOT.
+          The whole rail used to be one scrolling column, so on a short PC window
+          the bottom of it — clock, collapse toggle, version stamp — sat below the
+          viewport edge and had to be scrolled to (owner ticket 8/6). M3's nav rail
+          puts destinations in a scrollable region and anchors the utility cluster
+          to the bottom, which is what this split does: only this div scrolls, and
+          it can shrink to nothing (minHeight: 0) before the footer gives up a pixel. */}
+      <div style={{
+        flex: "1 1 auto", minHeight: 0, overflowY: "auto", overflowX: "hidden",
+        display: "flex", flexDirection: "column", gap: GAP,
+        alignItems: displayOpen ? "stretch" : "center",
+        width: "100%", boxSizing: "border-box",
       }}>
 
       {/* Record — real M3 FAB. Primary cross-app action lives at top of rail per M3 spec.
@@ -497,8 +515,18 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
         </button>
       ))}
 
-      {/* Spacer — pushes utility cluster to bottom (M3: destinations above, utilities below) */}
-      <div style={{ flex: 1 }} />
+      {/* Spacer — keeps destinations top-aligned inside the scroll region when
+          they are short enough to fit (M3: destinations above, utilities below). */}
+      <div style={{ flex: "1 0 0", minHeight: 0 }} />
+
+      </div>{/* ── end scroll region ── */}
+
+      {/* Utility cluster — pinned to the bottom of the rail, never scrolled away. */}
+      <div style={{
+        flexShrink: 0, display: "flex", flexDirection: "column", gap: GAP,
+        alignItems: displayOpen ? "stretch" : "center",
+        width: "100%", boxSizing: "border-box", paddingTop: GAP,
+      }}>
 
       {/* Focus — owner ticket: a clean rail function that looks at everything on the
           plate + the calendar and suggests exactly three good things to do now,
@@ -1010,21 +1038,26 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
         </span>
       </OutlinedIconButton>
 
-      {/* Version stamp */}
-      <div title={`Shamash Pro · v${APP_VERSION} · updated ${formatVersionStamp()}`} style={{
+      {/* Version stamp. The date carries an explicit "Last updated" / "upd" label:
+          bare "Aug 6 · 2:30p" under a live clock read as the current time (owner
+          ticket 8/6). The label is spelled out when the rail is open and abbreviated
+          when it is collapsed to 44px — the tooltip always has the full sentence. */}
+      <div title={`Shamash Pro · v${APP_VERSION} · last updated ${formatVersionStamp()}`} style={{
         width: "100%", flexShrink: 0, marginTop: px(8), paddingTop: px(7),
         borderTop: `1px solid ${C.divider}`,
         display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
       }}>
         <span style={{ fontSize: NC_TYPE.small, fontWeight: `var(--nc-fw-strong, 700)`, letterSpacing: displayOpen ? 1.4 : 0.4, color: C.faint, fontFamily: NC_FONT_STACK, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>v{APP_VERSION}</span>
         {displayOpen ? (
-          <span style={{ fontSize: NC_TYPE.small, color: C.faint, opacity: 0.7, fontFamily: NC_FONT_STACK, letterSpacing: 0.2, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{formatVersionStamp()}</span>
+          <span style={{ fontSize: NC_TYPE.small, color: C.faint, opacity: 0.7, fontFamily: NC_FONT_STACK, letterSpacing: 0.2, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>Last updated {formatVersionStamp()}</span>
         ) : (() => {
           const sv = versionStampShort();
           const ls = { fontSize: NC_TYPE.small, color: C.faint, opacity: 0.7, lineHeight: 1.15, fontFamily: NC_FONT_STACK, letterSpacing: 0.1, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
-          return (<><span style={ls}>{sv.date}</span>{sv.time && <span style={ls}>{sv.time}</span>}</>);
+          return (<><span style={{ ...ls, opacity: 0.55, textTransform: "uppercase", letterSpacing: 0.6 }}>upd</span><span style={ls}>{sv.date}</span>{sv.time && <span style={ls}>{sv.time}</span>}</>);
         })()}
       </div>
+
+      </div>{/* ── end utility cluster ── */}
     </div>
 
     </>

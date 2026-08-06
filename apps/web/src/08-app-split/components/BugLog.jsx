@@ -349,6 +349,28 @@ export function BugLog({ T, railVisible = true }) {
     b.status === filter;
   const visible = bugs.filter(matches);
 
+  // Two numbers per entry (owner ticket 8/6: "1 [574]").
+  //
+  //   • the lifetime number — where this ticket falls in the whole history of the
+  //     log, counting from the very first one ever filed. `bugs` arrives newest
+  //     first, so the newest entry's lifetime number is simply the total.
+  //   • the open number — its place in the unresolved queue alone, newest = 1, so
+  //     "there are 12 things on my plate and this is the freshest" reads at a glance.
+  //
+  // Both are computed over ALL bugs, never over the filtered `visible` list: a
+  // number that changes when you tap a filter chip is not an identifier.
+  const seq = React.useMemo(() => {
+    const map = new Map();
+    let open = 0;
+    bugs.forEach((b, i) => {
+      map.set(b.id, {
+        all: bugs.length - i,
+        open: b.status === 'unresolved' ? ++open : null,
+      });
+    });
+    return map;
+  }, [bugs]);
+
   // Anchored by default (left/bottom — immune to any viewport pixel-math drift);
   // switches to an explicit left/top once the user has actually dragged it.
   const fabPosStyle = fabPos ? { left: fabPos.x, top: fabPos.y } : { left: MARGIN, bottom: MARGIN };
@@ -439,7 +461,7 @@ export function BugLog({ T, railVisible = true }) {
               fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.text,
             }}>Bug Log</span>
             <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, whiteSpace: 'nowrap', flexShrink: 0 }}>
-              {unresolvedCount} open
+              {unresolvedCount} open <span style={{ opacity: 0.65 }}>[{bugs.length} total]</span>
             </span>
             <IconButton
               aria-label="Close bug log"
@@ -564,6 +586,20 @@ export function BugLog({ T, railVisible = true }) {
                       <div slot="headline" style={{ whiteSpace: 'normal', fontFamily: NC_FONT_STACK }}>{display}</div>
                       <div slot="supporting-text" style={{ fontFamily: NC_FONT_STACK }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {(() => {
+                            const n = seq.get(b.id);
+                            if (!n) return null;
+                            return (
+                              <span
+                                title={n.open
+                                  ? `Open ticket #${n.open} of ${unresolvedCount} · entry ${n.all} of ${bugs.length} in the whole log`
+                                  : `Entry ${n.all} of ${bugs.length} in the whole log`}
+                                style={{ color: C.faint, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                                {n.open ? <span style={{ color: C.text, fontWeight: `var(--nc-fw-semibold, 600)` }}>{n.open}&nbsp;</span> : null}
+                                [{n.all}]
+                              </span>
+                            );
+                          })()}
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: s.color }}>
                             <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
                             {s.label}
