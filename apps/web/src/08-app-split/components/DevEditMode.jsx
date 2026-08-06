@@ -34,6 +34,11 @@
 //      Mutations inside `[data-dev-edit-ui]` are now ignored, an unchanged
 //      measurement no longer sets state at all, and scanning stops entirely while
 //      the dialog is open.
+//   4. React keys must not contain coordinates. They did, so a single scroll
+//      changed every key and React destroyed and rebuilt every <md-icon-button> on
+//      screen — hundreds of shadow roots per frame. Keys now come from a WeakMap
+//      keyed on the element itself, a moved control only gets a style update, and
+//      measurements are throttled to MIN_RESCAN_GAP_MS apart.
 
 import React from 'react';
 import { createPortal } from 'react-dom';
@@ -53,14 +58,56 @@ const TARGET_SELECTOR = [
   'md-switch', 'md-checkbox', 'md-radio', 'md-slider',
   'md-outlined-text-field', 'md-filled-text-field',
   'md-outlined-select', 'md-assist-chip', 'md-filter-chip', 'md-suggestion-chip',
+  '[contenteditable=""]', '[contenteditable="true"]',
 ].join(',');
+
+// Anything that holds or shows text. These are exempt from the "outermost match
+// wins" rule below: a read-only field inside a row that is itself a button was
+// being swallowed by the row and got no marks at all (owner, 8/6 — "some text
+// fields, especially read only, don't have edit functions"). A field is a separate
+// thing to complain about from the row that contains it.
+const FIELD_SELECTOR = [
+  'input', 'textarea', 'select',
+  'md-outlined-text-field', 'md-filled-text-field', 'md-outlined-select',
+  '[contenteditable=""]', '[contenteditable="true"]',
+].join(',');
+
+// Stable identity per DOM element, so React reuses the same two <md-icon-button>
+// elements for a control instead of destroying and rebuilding them. The key used
+// to contain the control's coordinates, which meant ONE scroll changed every key
+// and React tore down and reconstructed up to 800 web components — shadow roots,
+// ripples and focus rings included — inside a single frame. That is what still
+// froze the page. A WeakMap keeps this out of the DOM (a data attribute would trip
+// our own MutationObserver) and lets elements be garbage-collected normally.
+const idMap = new WeakMap();
+let idSeq = 0;
+function idFor(el) {
+  let id = idMap.get(el);
+  if (id === undefined) { id = ++idSeq; idMap.set(el, id); }
+  return id;
+}
 
 // A rectangle smaller than this is a decoration or a collapsed control, not
 // something worth marking.
 const MIN_TARGET_PX = 12;
-// Hard ceiling so a pathological screen cannot paint thousands of marks.
-const MAX_TARGETS = 400;
+// Hard ceiling so a pathological screen cannot paint thousands of marks, and a
+// floor it degrades to rather than stalling (see the budget below).
+const MAX_TARGETS = 250;
+const MIN_TARGETS = 60;
+// How long one measurement is allowed to take before this overlay decides it is
+// too expensive for the page it landed on. A freeze is never an acceptable outcome
+// for a diagnostic tool, and no fixed cost is safe on every screen — so instead of
+// guessing a number that works everywhere, it measures itself: over budget and it
+// backs off (fewer marks, longer gaps between measurements), comfortably under and
+// it eases back. Worst case, edit mode gets sluggish and thins out; it cannot lock
+// the page up.
+const SCAN_BUDGET_MS = 45;
+const MAX_RESCAN_MS = 5000;
 const RESCAN_MS = 600;
+// Floor between two measurements. Scroll fires per frame and the MutationObserver
+// fires on every ripple; without a floor a flick-scroll asks for 60 full-page
+// measurements a second.
+const MIN_RESCAN_GAP_MS = 180;
 // Glyph and hit-target px for a corner mark. Constants, not inline literals, so the
 // two sizes stay in step with the inset that positions them.
 const MARK_ICON_CSS = '15px';
@@ -138,16 +185,18 @@ function clipRectFor(el) {
 }
 
 // Collect every visible control, outermost only, excluding our own chrome.
-function scanTargets() {
+function scanTargets(cap = MAX_TARGETS) {
   const out = [];
   let nodes;
   try { nodes = document.querySelectorAll(TARGET_SELECTOR); } catch { return out; }
   for (const el of nodes) {
-    if (out.length >= MAX_TARGETS) break;
+    if (out.length >= cap) break;
     if (el.closest('[data-dev-edit-ui]')) continue;
-    // Outermost match only — the parent chain already owns this rectangle.
-    if (el.parentElement && el.parentElement.closest(TARGET_SELECTOR)) continue;
-    if (el.disabled) continue;
+    // Outermost match only — the parent chain already owns this rectangle — except
+    // for fields, which are always their own target (see FIELD_SELECTOR).
+    if (el.parentElement && el.parentElement.closest(TARGET_SELECTOR) && !el.matches(FIELD_SELECTOR)) continue;
+    // Disabled and read-only controls are marked like any other: they are still
+    // things on the screen the owner may want changed or removed.
     const r = el.getBoundingClientRect();
     if (r.width < MIN_TARGET_PX || r.height < MIN_TARGET_PX) continue;
 
@@ -167,7 +216,7 @@ function scanTargets() {
     if (width < MIN_TARGET_PX || height < 4) continue;
 
     out.push({
-      key: `${out.length}:${Math.round(left)}:${Math.round(top)}:${Math.round(width)}`,
+      key: idFor(el),
       top, left, width, height,
       label: labelFor(el), path: pathFor(el), tag: el.tagName.toLowerCase(),
     });
@@ -179,7 +228,7 @@ function scanTargets() {
 // therefore never re-enters the mutation → rescan → repaint loop.
 function signature(list) {
   let s = '';
-  for (const t of list) s += `${t.key}|${Math.round(t.height)};`;
+  for (const t of list) s += `${t.key}:${Math.round(t.left)}:${Math.round(t.top)}:${Math.round(t.width)}:${Math.round(t.height)};`;
   return s;
 }
 
@@ -210,6 +259,35 @@ function CornerMark({ icon, color, title, onClick, style }) {
   );
 }
 
+// One control's frame plus its two marks. Memoised on geometry and colour, so a
+// scroll that moves ten rows re-renders ten frames, not every frame on screen.
+const TargetFrame = React.memo(function TargetFrame({ t, borderColor, pencil, danger, onEdit, onDelete }) {
+  // On a narrow control the two marks would sit on top of each other, so they tuck
+  // to the outside edges instead of the inside corners.
+  const roomy = t.width >= MARK_HIT_PX * 2 + 8;
+  const inset = roomy ? 0 : -MARK_HIT_PX / 2;
+  return (
+    <div style={{
+      position: 'absolute', top: t.top, left: t.left, width: t.width, height: t.height,
+      // Faint, not decorative: the outline says "this is a thing you can point at".
+      border: `1px dashed ${borderColor}`, borderRadius: RADIUS.xs,
+      pointerEvents: 'none', boxSizing: 'border-box',
+    }}>
+      <CornerMark icon="edit" color={pencil} title={`Suggest a change to “${t.label}”`}
+        onClick={() => onEdit(t)} style={{ top: 0, left: inset }} />
+      <CornerMark icon="delete" color={danger} title={`Ask to remove “${t.label}”`}
+        onClick={() => onDelete(t)} style={{ top: 0, right: inset }} />
+    </div>
+  );
+}, (a, b) =>
+  // scanTargets builds fresh objects every pass, so the default shallow compare
+  // would never match. Compare what actually affects the paint.
+  a.t.top === b.t.top && a.t.left === b.t.left &&
+  a.t.width === b.t.width && a.t.height === b.t.height &&
+  a.t.label === b.t.label &&
+  a.borderColor === b.borderColor && a.pencil === b.pencil && a.danger === b.danger &&
+  a.onEdit === b.onEdit && a.onDelete === b.onDelete);
+
 function DevEditMode({ enabled = false, T = {}, onExit }) {
   const C = T;
   const [targets, setTargets] = React.useState([]);
@@ -221,6 +299,10 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
   const [flash, setFlash] = React.useState(null);
   const rafRef = React.useRef(0);
   const sigRef = React.useRef('');
+  const lastScanRef = React.useRef(0);
+  const rescanRef = React.useRef(null);
+  // Self-throttling state: how many controls to measure and how often.
+  const budgetRef = React.useRef({ cap: MAX_TARGETS, gap: RESCAN_MS, warned: false });
 
   // One rAF-coalesced rescan, shared by the timer, scroll, resize and the
   // MutationObserver. It sets state only when the measurement actually changed —
@@ -230,13 +312,41 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0;
-      const next = scanTargets();
+      const now = Date.now();
+      const since = now - lastScanRef.current;
+      if (since < MIN_RESCAN_GAP_MS) {
+        // Re-arm rather than drop it: the last frame of a flick-scroll is the one
+        // that decides where the marks finally sit.
+        rafRef.current = -1;
+        setTimeout(() => { rafRef.current = 0; rescanRef.current?.(); }, MIN_RESCAN_GAP_MS - since);
+        return;
+      }
+      lastScanRef.current = now;
+      const budget = budgetRef.current;
+      const t0 = performance.now();
+      const next = scanTargets(budget.cap);
+      const cost = performance.now() - t0;
+      if (cost > SCAN_BUDGET_MS) {
+        // Measure less OFTEN before marking less: a slower-following outline is a
+        // far better trade than controls that silently have no marks at all.
+        if (budget.gap < MAX_RESCAN_MS) budget.gap = Math.min(MAX_RESCAN_MS, budget.gap * 2);
+        else budget.cap = Math.max(MIN_TARGETS, Math.round(budget.cap / 2));
+        if (!budget.warned) {
+          budget.warned = true;
+          console.warn(`[edit mode] measuring this screen took ${Math.round(cost)}ms — thinning out to ${budget.cap} controls every ${budget.gap}ms so the page stays responsive`);
+        }
+      } else if (cost < SCAN_BUDGET_MS / 3 && (budget.cap < MAX_TARGETS || budget.gap > RESCAN_MS)) {
+        if (budget.cap < MAX_TARGETS) budget.cap = Math.min(MAX_TARGETS, budget.cap * 2);
+        else budget.gap = Math.max(RESCAN_MS, Math.round(budget.gap / 2));
+      }
       const sig = signature(next);
       if (sig === sigRef.current) return;
       sigRef.current = sig;
       setTargets(next);
     });
   }, []);
+
+  rescanRef.current = rescan;
 
   // Scanning stops while the dialog is open: the marks are not interactive behind
   // a modal anyway, and md-dialog's own DOM churn was the loudest thing feeding
@@ -250,8 +360,11 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
       return undefined;
     }
     rescan();
-    const timer = setInterval(rescan, RESCAN_MS);
-    window.addEventListener('scroll', rescan, true);
+    // A plain interval cannot follow the adaptive gap, so re-arm each tick.
+    let timer = 0;
+    const tick = () => { rescan(); timer = setTimeout(tick, budgetRef.current.gap); };
+    timer = setTimeout(tick, RESCAN_MS);
+    window.addEventListener('scroll', rescan, { capture: true, passive: true });
     window.addEventListener('resize', rescan);
     const mo = new MutationObserver(records => {
       // Ignore our own repaints — see rule 3 in the header comment.
@@ -262,16 +375,24 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
     });
     mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
     return () => {
-      clearInterval(timer);
-      window.removeEventListener('scroll', rescan, true);
+      clearTimeout(timer);
+      window.removeEventListener('scroll', rescan, { capture: true });
       window.removeEventListener('resize', rescan);
       mo.disconnect();
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      // A re-armed throttle may still be pending; clearing the ref is what stops it
+      // firing into a torn-down overlay.
+      rescanRef.current = null;
+      if (rafRef.current > 0) cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
     };
   }, [scanning, enabled, rescan]);
 
-  const openDraft = (mode, t) => { setDraft({ mode, ...t }); setNote(''); setReason('obsolete'); };
+  // Stable identities — a fresh arrow per render would defeat TargetFrame's memo.
+  const openDraft = React.useCallback((mode, t) => {
+    setDraft({ mode, ...t }); setNote(''); setReason('obsolete');
+  }, []);
+  const openEdit = React.useCallback(t => openDraft('edit', t), [openDraft]);
+  const openDelete = React.useCallback(t => openDraft('delete', t), [openDraft]);
 
   // The ticket text is the whole point: everything needed to find this control
   // again is baked in, so a future session does not have to reconstruct it.
@@ -317,28 +438,10 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
     <div data-dev-edit-ui="true" style={{ position: 'fixed', inset: 0, zIndex: Z.systemBar, pointerEvents: 'none', fontFamily: NC_FONT_STACK }}>
       {/* One frame per control: a faint outline so you can see what is editable,
           with the pencil and the garbage can on its top corners. */}
-      {targets.map(t => {
-        // On a narrow control the two marks would sit on top of each other, so they
-        // tuck to the outside edges instead of the inside corners.
-        const roomy = t.width >= MARK_HIT_PX * 2 + 8;
-        const inset = roomy ? 0 : -MARK_HIT_PX / 2;
-        return (
-          <div key={t.key} style={{
-            position: 'absolute', top: t.top, left: t.left, width: t.width, height: t.height,
-            // Faint, not decorative: the outline says "this is a thing you can point
-            // at". Opacity stays off the wrapper so it cannot wash out the two marks.
-            border: `1px dashed ${C.divider}`, borderRadius: RADIUS.xs,
-            pointerEvents: 'none', boxSizing: 'border-box',
-          }}>
-            <CornerMark icon="edit" color={pencil} title={`Suggest a change to “${t.label}”`}
-              onClick={() => openDraft('edit', t)}
-              style={{ top: 0, left: inset }} />
-            <CornerMark icon="delete" color={danger} title={`Ask to remove “${t.label}”`}
-              onClick={() => openDraft('delete', t)}
-              style={{ top: 0, right: inset }} />
-          </div>
-        );
-      })}
+      {targets.map(t => (
+        <TargetFrame key={t.key} t={t} borderColor={C.divider} pencil={pencil} danger={danger}
+          onEdit={openEdit} onDelete={openDelete} />
+      ))}
 
       {/* Watermark — on every page, unmissable, never in the way. */}
       <div style={{
