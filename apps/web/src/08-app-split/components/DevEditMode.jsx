@@ -108,6 +108,12 @@ const MIN_TARGETS = 60;
 // the page up.
 const SCAN_BUDGET_MS = 45;
 const MAX_RESCAN_MS = 5000;
+// Circuit breaker. If measuring keeps costing this much even after backing off, the
+// screen is beyond what this overlay can follow, and a diagnostic tool that makes
+// the app unusable is worse than no diagnostic tool: it switches itself off and says
+// so. Whatever else is ever wrong here, the app cannot be left frozen.
+const EMERGENCY_MS = 120;
+const EMERGENCY_STRIKES = 3;
 const RESCAN_MS = 600;
 // Floor between two measurements. Scroll fires per frame and the MutationObserver
 // fires on every ripple; without a floor a flick-scroll asks for 60 full-page
@@ -327,12 +333,19 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
   const [flash, setFlash] = React.useState(null);
   // The one control whose icons are showing, summoned by long-press / right-click.
   const [active, setActive] = React.useState(null);
+  // Set when the circuit breaker trips: measuring stops at once, the message stays
+  // on screen for a moment, and then the Settings switch itself is turned off.
+  const [selfOff, setSelfOff] = React.useState(false);
   const rafRef = React.useRef(0);
   const sigRef = React.useRef('');
   const lastScanRef = React.useRef(0);
   const rescanRef = React.useRef(null);
   // Self-throttling state: how many controls to measure and how often.
-  const budgetRef = React.useRef({ cap: MAX_TARGETS, gap: RESCAN_MS, warned: false });
+  const budgetRef = React.useRef({ cap: MAX_TARGETS, gap: RESCAN_MS, warned: false, strikes: 0 });
+  // The exit callback, reachable from inside the measuring loop without making the
+  // loop depend on it.
+  const exitRef = React.useRef(onExit);
+  exitRef.current = onExit;
 
   // One rAF-coalesced rescan, shared by the timer, scroll, resize and the
   // MutationObserver. It sets state only when the measurement actually changed —
@@ -356,6 +369,23 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
       const t0 = performance.now();
       const next = scanTargets(budget.cap);
       const cost = performance.now() - t0;
+
+      if (cost > EMERGENCY_MS) {
+        budget.strikes += 1;
+        if (budget.strikes >= EMERGENCY_STRIKES) {
+          console.warn(`[edit mode] measuring this screen cost ${Math.round(cost)}ms ${EMERGENCY_STRIKES} times running — switching edit mode off so the app stays usable`);
+          setActive(null);
+          setTargets([]);
+          setSelfOff(true);
+          setFlash('Edit mode switched itself off — this screen was too heavy to outline. Nothing else changed.');
+          // Long enough to read, then the setting goes off for real.
+          setTimeout(() => exitRef.current?.(), 3500);
+          return;
+        }
+      } else if (budget.strikes > 0) {
+        budget.strikes = 0;
+      }
+
       if (cost > SCAN_BUDGET_MS) {
         // Measure less OFTEN before marking less: a slower-following outline is a
         // far better trade than controls that silently have no marks at all.
@@ -384,12 +414,12 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
   // Scanning stops while the dialog is open: the marks are not interactive behind
   // a modal anyway, and md-dialog's own DOM churn was the loudest thing feeding
   // the loop above.
-  const scanning = enabled && !draft;
+  const scanning = enabled && !draft && !selfOff;
 
   React.useEffect(() => {
     if (!scanning) {
       sigRef.current = '';
-      if (!enabled) setTargets([]);
+      if (!enabled) { setTargets([]); setSelfOff(false); budgetRef.current.strikes = 0; }
       return undefined;
     }
     rescan();
