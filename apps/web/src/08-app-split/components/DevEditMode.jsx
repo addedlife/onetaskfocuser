@@ -1,33 +1,46 @@
 // ─── Dev edit mode ────────────────────────────────────────────────────────────
 //
 // WHAT THIS IS (plain English): a switch in Settings that puts the whole app into
-// "tell me what's wrong with this" mode. Every button and every text box grows two
-// little bubbles, exactly like wiggling apps on an iPhone home screen — a pencil
-// ("change this") and a garbage can ("this shouldn't be here"). The app keeps
-// working normally the whole time; the bubbles float on a layer above it. Whatever
+// "tell me what's wrong with this" mode. Every button and every text box gets a
+// faint outline, a small blue pencil in its top-left corner ("change this") and a
+// small red garbage can in its top-right ("this shouldn't be here"). The app keeps
+// working normally the whole time; the marks float on a layer above it. Whatever
 // the owner types goes straight into the Bug Log as a ticket, with the button's
 // name, the screen it was on and the app version already filled in, so it can be
 // found again later without anybody having to remember the context.
 //
 // HOW IT WORKS: one fixed overlay layer (`pointer-events: none`) sits above the
-// app and paints a pair of bubbles over the rectangle of every interactive element
-// found by `document.querySelectorAll`. Nothing about the app's own markup changes
-// — no component had to be touched to take part, which is the only way "every
-// single button or input field" is achievable across a 5,000-line surface. The
-// rectangles are re-measured on scroll, resize, DOM mutation and on a slow timer,
-// all funnelled through one rAF so a busy screen cannot thrash.
+// app and paints a frame over the rectangle of every interactive element found by
+// `document.querySelectorAll`. Nothing about the app's own markup changes — no
+// component had to be touched to take part, which is the only way "every single
+// button or input field" is achievable across a 5,000-line surface. Rectangles are
+// re-measured on scroll, resize, DOM mutation and on a slow timer, all funnelled
+// through one rAF.
 //
-// Only the outermost match gets bubbles: an <md-icon-button> is one control, not a
-// host element plus its inner shadow button, and a row that is itself a button
-// swallows its children. Anything inside this overlay is skipped by the
-// `[data-dev-edit-ui]` marker, so the bubbles never grow bubbles.
+// THREE RULES LEARNED THE HARD WAY (owner, 8/6 — "one massive clutter of red and
+// blue circles", and the app froze on submit):
+//
+//   1. No filled circles. Bare glyphs — a blue pencil and a red garbage can —
+//      because 200 filled badges on one screen read as confetti, not as controls.
+//   2. A control that is scrolled out of its own list must lose its marks too. The
+//      viewport is not the only clipper: a card body with its own scrollbar hides
+//      rows that are still inside the window, and marks for those rows used to
+//      float over the card's header. `clipRectFor` intersects every scrollable
+//      ancestor, so a mark appears exactly when the row it belongs to is showing.
+//   3. Never let this overlay observe itself. The MutationObserver watches
+//      document.body, and this overlay lives IN document.body — so every repaint
+//      of the marks fed the observer, which rescanned, which repainted. That loop
+//      ran at frame rate and is what locked the page up when the dialog opened.
+//      Mutations inside `[data-dev-edit-ui]` are now ignored, an unchanged
+//      measurement no longer sets state at all, and scanning stops entirely while
+//      the dialog is open.
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { NC_FONT_STACK, NC_TYPE, RADIUS, SP, ELEV, Z, suiteIcon } from '../ui-tokens.jsx';
+import { CAT_MAIL, NC_FONT_STACK, NC_TYPE, RADIUS, SP, ELEV, Z, suiteIcon } from '../ui-tokens.jsx';
 import { APP_VERSION } from '../../version.js';
 import { Store, textOnColor } from '../../01-core.js';
-import { Dialog, TextField, ActionBtn, FilledIconButton, OutlinedSelect, SelectOption } from '../m3.jsx';
+import { Dialog, TextField, ActionBtn, IconButton, FilledIconButton, OutlinedSelect, SelectOption } from '../m3.jsx';
 
 // Every control the owner can point at. Custom elements are listed by tag because
 // their real <button> lives in shadow DOM, where querySelectorAll cannot reach.
@@ -43,15 +56,16 @@ const TARGET_SELECTOR = [
 ].join(',');
 
 // A rectangle smaller than this is a decoration or a collapsed control, not
-// something worth hanging two bubbles on.
+// something worth marking.
 const MIN_TARGET_PX = 12;
-// Hard ceiling so a pathological screen cannot paint thousands of bubbles.
+// Hard ceiling so a pathological screen cannot paint thousands of marks.
 const MAX_TARGETS = 400;
 const RESCAN_MS = 600;
-const BUBBLE = 22;
-// Glyph px inside a bubble. Held in a constant, not inline, so the size lives in one
-// place alongside the container it has to fit.
-const BUBBLE_ICON_CSS = `${22 - 10}px`;
+// Glyph and hit-target px for a corner mark. Constants, not inline literals, so the
+// two sizes stay in step with the inset that positions them.
+const MARK_ICON_CSS = '15px';
+const MARK_HIT_CSS = '20px';
+const MARK_HIT_PX = 20;
 
 const DELETE_REASONS = [
   { value: 'obsolete',  label: 'Obsolete — nothing uses it any more' },
@@ -99,6 +113,30 @@ function screenName() {
   } catch { return document.title || 'app'; }
 }
 
+// The rectangle a control is actually allowed to show inside: the viewport,
+// narrowed by every scrolling ancestor between it and the page. `scrollHeight >
+// clientHeight` is the cheap test for "this box scrolls, therefore it clips" —
+// getComputedStyle on every ancestor of 400 elements, six times a second, is not
+// affordable, and a box that scrolls is a box that hides what overflows it.
+function clipRectFor(el) {
+  let top = 0, left = 0;
+  let right = window.innerWidth, bottom = window.innerHeight;
+  let node = el.parentElement;
+  let hops = 0;
+  while (node && node !== document.body && hops < 24) {
+    if (node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1) {
+      const r = node.getBoundingClientRect();
+      if (r.top > top) top = r.top;
+      if (r.left > left) left = r.left;
+      if (r.right < right) right = r.right;
+      if (r.bottom < bottom) bottom = r.bottom;
+    }
+    node = node.parentElement;
+    hops += 1;
+  }
+  return { top, left, right, bottom };
+}
+
 // Collect every visible control, outermost only, excluding our own chrome.
 function scanTargets() {
   const out = [];
@@ -112,39 +150,63 @@ function scanTargets() {
     if (el.disabled) continue;
     const r = el.getBoundingClientRect();
     if (r.width < MIN_TARGET_PX || r.height < MIN_TARGET_PX) continue;
-    if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) continue;
+
+    // The marks live on the top corners, so the top edge is what has to be
+    // showing. A row scrolled under its card header, or past the bottom of the
+    // card, drops its marks the same moment it stops being readable.
+    const clip = clipRectFor(el);
+    if (r.top < clip.top - 1 || r.top > clip.bottom - MIN_TARGET_PX) continue;
+    if (r.right < clip.left || r.left > clip.right) continue;
+
+    // Frame is clamped to the visible slice so a half-scrolled row is outlined
+    // only as far as it actually shows.
+    const top = Math.max(r.top, clip.top);
+    const left = Math.max(r.left, clip.left);
+    const width = Math.min(r.right, clip.right) - left;
+    const height = Math.min(r.bottom, clip.bottom) - top;
+    if (width < MIN_TARGET_PX || height < 4) continue;
+
     out.push({
-      key: `${out.length}:${Math.round(r.left)}:${Math.round(r.top)}:${Math.round(r.width)}`,
-      top: r.top, left: r.left, width: r.width, height: r.height,
+      key: `${out.length}:${Math.round(left)}:${Math.round(top)}:${Math.round(width)}`,
+      top, left, width, height,
       label: labelFor(el), path: pathFor(el), tag: el.tagName.toLowerCase(),
     });
   }
   return out;
 }
 
-// One bubble. Real M3 icon button, shrunk to badge size through its own container
-// tokens — a hand-rolled circle would be a lookalike, which the M3 rule forbids.
-function Bubble({ icon, color, onColor, title, onClick, style }) {
+// Cheap identity for a measurement, so an unchanged screen never sets state and
+// therefore never re-enters the mutation → rescan → repaint loop.
+function signature(list) {
+  let s = '';
+  for (const t of list) s += `${t.key}|${Math.round(t.height)};`;
+  return s;
+}
+
+// One corner mark. A real M3 icon button in its plain (standard) variant, which has
+// no container fill at all — a bare glyph with a hover state layer. The filled
+// variant is what turned a busy screen into "a massive clutter of red and blue
+// circles"; this is the same control without the badge.
+function CornerMark({ icon, color, title, onClick, style }) {
   return (
-    <FilledIconButton
+    <IconButton
       title={title}
       aria-label={title}
       onClick={e => { e.preventDefault(); e.stopPropagation(); onClick(); }}
       style={{
         position: 'absolute',
         pointerEvents: 'auto',
-        '--md-filled-icon-button-container-width': `${BUBBLE}px`,
-        '--md-filled-icon-button-container-height': `${BUBBLE}px`,
-        '--md-filled-icon-button-container-color': color,
-        '--md-filled-icon-button-icon-color': onColor,
-        '--md-icon-button-icon-size': BUBBLE_ICON_CSS,
-        boxShadow: ELEV[2],
-        borderRadius: RADIUS.pill,
+        '--md-icon-button-icon-size': MARK_ICON_CSS,
+        '--md-icon-button-state-layer-width': MARK_HIT_CSS,
+        '--md-icon-button-state-layer-height': MARK_HIT_CSS,
+        '--md-icon-button-icon-color': color,
+        width: MARK_HIT_CSS,
+        height: MARK_HIT_CSS,
         ...style,
       }}
     >
-      <span className="material-symbols-rounded" style={{ fontSize: BUBBLE_ICON_CSS }}>{icon}</span>
-    </FilledIconButton>
+      <span className="material-symbols-rounded" style={{ fontSize: MARK_ICON_CSS, color }}>{icon}</span>
+    </IconButton>
   );
 }
 
@@ -158,25 +220,46 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
   const [saving, setSaving] = React.useState(false);
   const [flash, setFlash] = React.useState(null);
   const rafRef = React.useRef(0);
+  const sigRef = React.useRef('');
 
   // One rAF-coalesced rescan, shared by the timer, scroll, resize and the
-  // MutationObserver. Without the coalescing a typing burst would re-measure
-  // hundreds of rectangles per keystroke.
+  // MutationObserver. It sets state only when the measurement actually changed —
+  // without that, painting the marks mutates the DOM, which wakes the observer,
+  // which rescans, which repaints, forever.
   const rescan = React.useCallback(() => {
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0;
-      setTargets(scanTargets());
+      const next = scanTargets();
+      const sig = signature(next);
+      if (sig === sigRef.current) return;
+      sigRef.current = sig;
+      setTargets(next);
     });
   }, []);
 
+  // Scanning stops while the dialog is open: the marks are not interactive behind
+  // a modal anyway, and md-dialog's own DOM churn was the loudest thing feeding
+  // the loop above.
+  const scanning = enabled && !draft;
+
   React.useEffect(() => {
-    if (!enabled) { setTargets([]); setDraft(null); return undefined; }
+    if (!scanning) {
+      sigRef.current = '';
+      if (!enabled) setTargets([]);
+      return undefined;
+    }
     rescan();
     const timer = setInterval(rescan, RESCAN_MS);
     window.addEventListener('scroll', rescan, true);
     window.addEventListener('resize', rescan);
-    const mo = new MutationObserver(rescan);
+    const mo = new MutationObserver(records => {
+      // Ignore our own repaints — see rule 3 in the header comment.
+      for (const rec of records) {
+        const node = rec.target instanceof Element ? rec.target : rec.target?.parentElement;
+        if (node && !node.closest('[data-dev-edit-ui]')) { rescan(); return; }
+      }
+    });
     mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
     return () => {
       clearInterval(timer);
@@ -186,12 +269,15 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
     };
-  }, [enabled, rescan]);
+  }, [scanning, enabled, rescan]);
 
   const openDraft = (mode, t) => { setDraft({ mode, ...t }); setNote(''); setReason('obsolete'); };
 
   // The ticket text is the whole point: everything needed to find this control
   // again is baked in, so a future session does not have to reconstruct it.
+  // The write is raced against a timeout — Store.addBug awaits Firestore, and an
+  // offline or blocked write otherwise leaves the dialog stuck on "Filing…" with
+  // no way out, which reads as a frozen app.
   const submit = async () => {
     if (!draft || saving) return;
     setSaving(true);
@@ -205,7 +291,13 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
       `Element: ${draft.path}`,
       `Note: ${trimmed || '(none given — the owner skipped the explanation)'}`,
     ].join('\n');
-    const id = await Store.addBug({ text, type: 'idea' });
+    let id = null;
+    try {
+      id = await Promise.race([
+        Store.addBug({ text, type: 'idea' }),
+        new Promise(resolve => setTimeout(() => resolve(null), 8000)),
+      ]);
+    } catch { id = null; }
     setSaving(false);
     setDraft(null);
     setFlash(id ? 'Filed in the Bug Log.' : 'Could not save that — check the connection and try again.');
@@ -216,24 +308,37 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
 
   const accent = C.accent || C.text;
   const danger = C.danger || C.warning || accent;
+  const pencil = CAT_MAIL;
   const surface = C.bg || C.bgSoft;
   const label = { fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.body, color: C.text };
   const help = { fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.meta, color: C.muted, lineHeight: 1.5 };
 
   return createPortal(
     <div data-dev-edit-ui="true" style={{ position: 'fixed', inset: 0, zIndex: Z.systemBar, pointerEvents: 'none', fontFamily: NC_FONT_STACK }}>
-      {/* Bubbles — pencil top-left, garbage can top-right, straddling the control's
-          own corners the way a home-screen delete badge does. */}
-      {targets.map(t => (
-        <React.Fragment key={t.key}>
-          <Bubble icon="edit" color={accent} onColor={textOnColor(accent)} title={`Suggest a change to “${t.label}”`}
-            onClick={() => openDraft('edit', t)}
-            style={{ top: t.top - BUBBLE / 2, left: t.left - BUBBLE / 2 }} />
-          <Bubble icon="delete" color={danger} onColor={textOnColor(danger)} title={`Ask to remove “${t.label}”`}
-            onClick={() => openDraft('delete', t)}
-            style={{ top: t.top - BUBBLE / 2, left: t.left + t.width - BUBBLE / 2 }} />
-        </React.Fragment>
-      ))}
+      {/* One frame per control: a faint outline so you can see what is editable,
+          with the pencil and the garbage can on its top corners. */}
+      {targets.map(t => {
+        // On a narrow control the two marks would sit on top of each other, so they
+        // tuck to the outside edges instead of the inside corners.
+        const roomy = t.width >= MARK_HIT_PX * 2 + 8;
+        const inset = roomy ? 0 : -MARK_HIT_PX / 2;
+        return (
+          <div key={t.key} style={{
+            position: 'absolute', top: t.top, left: t.left, width: t.width, height: t.height,
+            // Faint, not decorative: the outline says "this is a thing you can point
+            // at". Opacity stays off the wrapper so it cannot wash out the two marks.
+            border: `1px dashed ${C.divider}`, borderRadius: RADIUS.xs,
+            pointerEvents: 'none', boxSizing: 'border-box',
+          }}>
+            <CornerMark icon="edit" color={pencil} title={`Suggest a change to “${t.label}”`}
+              onClick={() => openDraft('edit', t)}
+              style={{ top: 0, left: inset }} />
+            <CornerMark icon="delete" color={danger} title={`Ask to remove “${t.label}”`}
+              onClick={() => openDraft('delete', t)}
+              style={{ top: 0, right: inset }} />
+          </div>
+        );
+      })}
 
       {/* Watermark — on every page, unmissable, never in the way. */}
       <div style={{
@@ -254,7 +359,7 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
       {flash && (
         <div style={{
           position: 'fixed', left: '50%', bottom: SP.xxl, transform: 'translateX(-50%)',
-          background: surface, color: C.text, border: `1px solid ${C.divider || C.brdS}`,
+          background: surface, color: C.text, border: `1px solid ${C.divider}`,
           borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.lg}`, boxShadow: ELEV[3],
           fontSize: NC_TYPE.body, pointerEvents: 'none',
         }}>{flash}</div>
@@ -263,7 +368,7 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
       <Dialog open={!!draft} onClosed={() => setDraft(null)}
         style={{ '--md-dialog-container-color': surface, maxWidth: 'min(520px, 94vw)', minWidth: 'min(520px, 94vw)' }}>
         <div slot="headline" style={{ display: 'flex', alignItems: 'center', gap: SP.sm, ...label, fontSize: NC_TYPE.title }}>
-          <span style={{ color: draft?.mode === 'delete' ? danger : accent, display: 'inline-flex' }}>
+          <span style={{ color: draft?.mode === 'delete' ? danger : pencil, display: 'inline-flex' }}>
             {suiteIcon(draft?.mode === 'delete' ? 'delete' : 'edit', 20)}
           </span>
           <span style={{ flex: 1 }}>{draft?.mode === 'delete' ? 'Remove this?' : 'What should change?'}</span>
