@@ -1428,8 +1428,11 @@ function BuildUpdateOverlay({ showPrompt, showIndicator, title, body, onShowProm
       {showPrompt ? (
         <div className="dp-build-overlay" data-native-source="MainWindow.xaml:855">
           <div className="dp-build-dialog">
-            <h2>{title || "New DeskPhone build available"}</h2>
-            <p>{body || "The native DeskPhone app can switch to the staged build when the host exposes the update action to the web shell."}</p>
+            <h2>{title || "A newer DeskPhone is ready"}</h2>
+            {/* Owner ticket: the default body read "the host exposes the update
+                action to the web shell", which says nothing to the person being
+                asked a yes/no question. Say what happens if they say yes. */}
+            <p>{body || "Switching takes a few seconds and reconnects your phone on its own. Nothing in your texts or call history changes."}</p>
             <div className="dp-build-dialog-actions">
               <ShellButton className="dp-primary" nativeSource="MainWindow.xaml:882" onClick={onAccept}>
                 Use New Build
@@ -6501,10 +6504,14 @@ export function DeskPhoneWebPanel({
     if (connecting) return cap(`connecting to ${name}…`);
     return cap(`${name} is out of range — reconnects when nearby`);
   }, [link, status, viaCloud, hostLabel]);
-  // Reconnect prompt only makes sense on the direct path — over the cloud the
-  // user can't "start" the host from here, so don't nag with it.
-  const showReconnectPrompt = !reconnectDismissed && !viaCloud && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || !online);
   const effectiveBuildPrompt = !!(status?.showBuildUpdatePrompt || status?.ShowBuildUpdatePrompt || showBuildPrompt);
+  // Reconnect prompt only makes sense on the direct path — over the cloud the
+  // user can't "start" the host from here. It also stands down while the build
+  // dialog is up: that dialog is modal, so showing both produced the two
+  // stacked pop-ups the owner reported, one of them un-clickable behind the
+  // other. One question on screen at a time.
+  const showReconnectPrompt = !reconnectDismissed && !viaCloud && !effectiveBuildPrompt
+    && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || !online);
   const effectiveBuildIndicator = !!(status?.showBuildUpdateIndicator || status?.ShowBuildUpdateIndicator || showBuildIndicator);
   const effectiveMuted = !!(status?.isMuted ?? status?.IsMuted ?? muted);
 

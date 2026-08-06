@@ -298,6 +298,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     try { return localStorage.getItem('ot_google_account_filter') || 'all'; } catch { return 'all'; }
   });
   const gTokenClientRef = useRef(null);
+  const googleCodeClientConfigRef = useRef(null);
 
   // Insights tab state
   const [tipViewIdx, setTipViewIdx] = useState(() => tipOfDay(dayKey())); // init to today's daily tip
@@ -804,11 +805,19 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     return d.profile;
   }
 
-  const loadGoogleWorkspaceFromServer = useCallback(async () => {
+  // `filterOverride` is the account just picked. Reading the choice back out of
+  // localStorage instead was the account switcher's dead-ness: a value written
+  // by an older build, or an account since disconnected, is not a real email,
+  // the server matched nothing, and (before the fix below) it silently answered
+  // with BOTH accounts — the exact "switcher is dead, stuck to both" symptom,
+  // with nothing on screen admitting a choice had been dropped.
+  const loadGoogleWorkspaceFromServer = useCallback(async (filterOverride) => {
     setGoogleLoading(true);
     try {
-      let filter = "all";
-      try { filter = localStorage.getItem("ot_google_account_filter") || "all"; } catch {}
+      let filter = filterOverride || "";
+      if (!filter) {
+        try { filter = localStorage.getItem("ot_google_account_filter") || "all"; } catch { filter = "all"; }
+      }
       const accountsArg = filter && filter !== "all" ? [filter] : "all";
       const _now = new Date();
       const timeMin = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).toISOString();
@@ -820,6 +829,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       applyEmailSummaries(rawMsgs); // AI-summarize only cache misses
       if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
       if (Array.isArray(d.grants)) setGoogleGrants(d.grants);
+      // The server now says which accounts it actually read. If we asked for one
+      // and it read them all, the stored choice names an account that is no
+      // longer connected — drop it rather than leaving a picker that shows a
+      // checkmark next to a filter nothing is honouring.
+      if (filter !== "all" && Array.isArray(d.selectedAccounts) && !d.selectedAccounts.includes(String(filter).toLowerCase())) {
+        setGoogleAccountFilter("all");
+        try { localStorage.setItem("ot_google_account_filter", "all"); } catch {}
+      }
       setGoogleServerConnected(true);
       setGoogleToken(GOOGLE_SERVER_TOKEN);
       setGoogleWasConnected(true);
@@ -847,7 +864,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const next = value || "all";
     setGoogleAccountFilter(next);
     try { localStorage.setItem("ot_google_account_filter", next); } catch {}
-    loadGoogleWorkspaceFromServer();
+    loadGoogleWorkspaceFromServer(next);
   }, [loadGoogleWorkspaceFromServer]);
 
   // iOS redirect: Google popup is blocked on iOS, so GIS uses redirect mode and returns
@@ -903,12 +920,19 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         console.log('[Google] initCodeClient', isIOS ? '(redirect/iOS)' : '(popup)');
-        gTokenClientRef.current = window.google.accounts.oauth2.initCodeClient({
+        // Kept in a ref so a per-account reconnect (connectGoogle(email)) can
+        // rebuild the client with a login_hint without restating any of this.
+        googleCodeClientConfigRef.current = {
           client_id: serverGoogleClientId,
           scope: GOOGLE_OAUTH_SCOPES,
-          ux_mode: isIOS ? 'redirect' : 'popup',
-          ...(isIOS ? { redirect_uri: window.location.origin } : {}),
           include_granted_scopes: true,
+          // Owner ticket: "Google signing brings me to whatever acct is up in
+          // chrome and need to switch to rabbidanziger". Without this, Google
+          // silently picks the browser's active session, so connecting the
+          // SECOND mailbox re-consented the first one and the second account's
+          // mail never arrived. Always show the chooser — this app is explicitly
+          // a two-mailbox app, so "which account" is never a safe assumption.
+          select_account: true,
           callback: async (resp) => {
             console.log('[Google] Code callback error:', resp.error || 'none', '| has code:', !!resp.code);
             if (resp.error) {
@@ -937,6 +961,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               setGoogleLoading(false);
             }
           },
+        };
+        gTokenClientRef.current = window.google.accounts.oauth2.initCodeClient({
+          ...googleCodeClientConfigRef.current,
+          ux_mode: isIOS ? 'redirect' : 'popup',
+          ...(isIOS ? { redirect_uri: window.location.origin } : {}),
         });
         console.log('[Google] Code client ready:', !!gTokenClientRef.current);
         if (localStorage.getItem('ot_google_connected') === '1') {
@@ -1321,7 +1350,29 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     };
   }, [googleToken, calendarRefreshKey, useGoogleServerAuth, googleServerConnected, loadGoogleWorkspaceFromServer]); // eslint-disable-line
 
-  function connectGoogle() {
+  // `hintEmail` names the account this click is about — the "Reconnect" button on
+  // a notice that already says WHICH mailbox signed out. Owner ticket: clicking
+  // Reconnect "goes back to beginning of cycle" and the second account's mail
+  // never arrives, because the flow started with no idea which account it was
+  // meant to repair and Google handed back whichever session the browser had.
+  // A login_hint puts the right account in front of you; the chooser still
+  // appears, so it is a suggestion and never a lock-in.
+  function connectGoogle(hintEmail) {
+    const hint = typeof hintEmail === "string" && hintEmail.includes("@") ? hintEmail : "";
+    if (hint && useGoogleServerAuth && window.google?.accounts?.oauth2 && googleCodeClientConfigRef.current) {
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      try {
+        gTokenClientRef.current = window.google.accounts.oauth2.initCodeClient({
+          ...googleCodeClientConfigRef.current,
+          ux_mode: isIOS ? 'redirect' : 'popup',
+          ...(isIOS ? { redirect_uri: window.location.origin } : {}),
+          login_hint: hint,
+        });
+      } catch (e) {
+        console.warn('[Google] could not re-init code client with a login hint:', e?.message);
+      }
+    }
     if (!effectiveGoogleClientId) {
       setGoogleError('Google connector needs a Google OAuth Client ID in Settings > Google.');
       return;

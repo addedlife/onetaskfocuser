@@ -299,7 +299,13 @@ async function summary(user, body = {}) {
   if (!accounts.length) throw httpError(401, "Google Workspace is not connected.");
   const filter = normalizeAccountFilter(body.accounts);
   const targets = filter === "all" ? accounts : accounts.filter(a => filter.includes(a.email));
+  // Falling back to every account when the requested one matched nothing is the
+  // right behaviour — an empty inbox would be worse — but doing it SILENTLY is
+  // what made the account switcher look dead: you picked one account, got both,
+  // and nothing said the choice had been dropped. The client reads
+  // `selectedAccounts` back and resets its stored filter when this happens.
   const used = targets.length ? targets : accounts;
+  const filterDropped = filter !== "all" && !targets.length;
 
   const perAccount = await Promise.all(used.map(async acct => {
     try {
@@ -372,7 +378,13 @@ async function summary(user, body = {}) {
     selectedAccounts: used.map(a => a.email),
     calendarEvents,
     gmailMessages,
-    errors: [...perAccount.map(p => p.error).filter(Boolean), ...unusedErrors],
+    errors: [
+      ...(filterDropped
+        ? [`${filter.join(", ")} is not a connected Google account — showing every connected account instead.`]
+        : []),
+      ...perAccount.map(p => p.error).filter(Boolean),
+      ...unusedErrors,
+    ],
     // Which accounts failed, by email — so the UI can name them rather than
     // concatenating error prose.
     failedAccounts: [

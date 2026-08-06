@@ -1823,6 +1823,23 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     { icon: "person_add", label: "Add account", run: () => onConnectGoogle?.() },
   ] : [];
 
+  // ── Refresh, with something to look at ─────────────────────────────────────
+  // Owner ticket: "refresh seems to do nothing". It did re-pull — it just did it
+  // silently, so a pull that came back with the same mail was indistinguishable
+  // from a dead button. One descriptor, used by every layout's refresh control:
+  // the glyph turns to `sync` and the button goes inert while the pull is in
+  // flight, so the click always has a visible consequence.
+  const googleRefreshProps = {
+    icon: googleLoading ? "sync" : "refresh",
+    disabled: googleLoading || undefined,
+    onClick: () => { if (!googleLoading) (onRefreshCalendar || onConnectGoogle)?.(); },
+  };
+  const googleRefreshMenuItem = (label = "Refresh") => ({
+    icon: googleLoading ? "sync" : "refresh",
+    label: googleLoading ? "Refreshing…" : label,
+    run: () => { if (!googleLoading) (onRefreshCalendar || onConnectGoogle)?.(); },
+  });
+
   // ── Google connection notice — ONE definition, shown in EVERY layout ────────
   // Owner ticket: "email auth tokens expire silently and go stale, emails I don't
   // even know except for the gridcard format which says so, needs to say that
@@ -1858,7 +1875,11 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     if (googleFailedAccounts.length) {
       return googleNoticeRow(softBg(C.warning, 0.10), C.warning, C.warning, "link_off",
         `${googleFailedAccounts.join(", ")} is signed out — mail and calendar from ${googleFailedAccounts.length > 1 ? "those accounts are" : "that account are"} not updating.`,
-        "Reconnect", () => onConnectGoogle?.());
+        // Name the account in the reconnect too, not just in the sentence: one
+        // signed-out mailbox out of two used to restart the generic connect
+        // flow, which Google answered with whichever account the browser was
+        // already showing (owner ticket MsISWD2d).
+        "Reconnect", () => onConnectGoogle?.(googleFailedAccounts.length === 1 ? googleFailedAccounts[0] : undefined));
     }
     if (googleError) {
       return googleNoticeRow(softBg(C.warning, 0.10), C.warning, C.warning, "error", googleError, "Retry", () => onConnectGoogle?.());
@@ -1876,7 +1897,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     if (staleGrantAccounts.length) {
       return googleNoticeRow(softBg(C.warning, 0.10), C.warning, C.warning, "lock_reset",
         `${staleGrantAccounts.join(", ")} was connected before replying and deleting were enabled — reading works, sending and deleting do not.`,
-        "Reconnect", () => onConnectGoogle?.());
+        "Reconnect", () => onConnectGoogle?.(staleGrantAccounts.length === 1 ? staleGrantAccounts[0] : undefined));
     }
     // Filtered to one account while another is connected. Nothing was broken and
     // nothing said anything — the other account's mail simply was not there, which
@@ -2232,30 +2253,39 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // status line embeds "last seen Xm ago" — every relay refresh rewrote those strings
   // and re-fired the snapshot. Identity/freshness of phone activity is captured by
   // name+preview/kind+unread, so dropping time/status loses no real change detection.
+  // ── The scan key is a WHITELIST, and that is the whole fix ─────────────────
+  // Every previous round of this bug (jYozknRO, gufdsEDT, umG220dj, 9f6eubMl,
+  // EsLx8PYS, and the current "firing every 5 minutes" ticket) was the same
+  // shape: the key was built by SPREADING chiefContext and deleting the
+  // clock-derived fields known to have leaked. That list can only ever be
+  // complete for the fields that had already been caught — the moment anyone
+  // adds a field to chiefContext that moves with the clock, the metronome comes
+  // back, and it comes back silently as an AI bill rather than as a visible
+  // fault. Nothing is spread here any more: each field is named, and a new
+  // field in chiefContext cannot reach this key until someone adds it here on
+  // purpose. Rule for that edit — include identity and content, never anything
+  // derived from the current time, from relay liveness, or from another AI job's
+  // asynchronous output.
+  const pick = (obj, keys) => {
+    const out = {};
+    for (const k of keys) out[k] = obj?.[k];
+    return out;
+  };
   const ncSummaryScanKey = useMemo(() => JSON.stringify({
-    ...chiefContext,
-    currentTime: undefined,
-    localeTime: undefined,
-    // `text` drops out for the same reason `summary` does on emails: it prefers the
-    // AI-polished ncSummary, which lands asynchronously AFTER the polish job, so
-    // every polish rewrote this key and fired a fresh snapshot — a feedback loop
-    // between two AI jobs (owner tickets umG220dj / 9f6eubMl / EsLx8PYS, 7/21).
-    // sourceKey, hashed off the raw text, still catches a genuine edit.
-    tasks: (chiefContext.tasks || []).map(({ ageHours, text, ...rest }) => rest),
-    shailos: (chiefContext.shailos || []).map(({ text, ...rest }) => rest),
-    emails: (chiefContext.emails || []).map(({ summary, ...rest }) => rest),
-    calendar: (chiefContext.calendar || []).map(({ now, past, ...rest }) => rest),
+    // sourceKey hashes the RAW text, so a `text`/`summary` rewritten by the
+    // polish job (an async result of a DIFFERENT AI call) can't masquerade as a
+    // content change, while a genuine edit still moves the hash.
+    tasks: (chiefContext.tasks || []).map(t => pick(t, ["sourceKey", "priority"])),
+    shailos: (chiefContext.shailos || []).map(s => pick(s, ["sourceKey", "status"])),
+    emails: (chiefContext.emails || []).map(e => pick(e, ["id", "threadId", "sourceKey", "freshnessKey", "from", "subject"])),
+    calendar: (chiefContext.calendar || []).map(c => pick(c, ["id", "calendarId", "sourceKey", "freshnessKey", "summary", "start", "end", "special", "routine"])),
     phone: chiefContext.phone ? {
-      ...chiefContext.phone,
-      // online flips with relay liveness (a flapping relay toggled it every poll and
-      // re-fired the snapshot — owner buglog 7/19); connectivity isn't content.
-      online: undefined,
-      status: undefined,
-      stale: undefined,
-      texts: (chiefContext.phone.texts || []).map(({ time, ...rest }) => rest),
-      calls: (chiefContext.phone.calls || []).map(({ time, ...rest }) => rest),
-    } : chiefContext.phone,
-  }), [chiefContext]);
+      ...pick(chiefContext.phone, ["unreadTexts", "missedCalls", "voicemailCount"]),
+      texts: (chiefContext.phone.texts || []).map(t => pick(t, ["name", "preview", "unread"])),
+      calls: (chiefContext.phone.calls || []).map(c => pick(c, ["name", "kind", "needsReturnCall"])),
+    } : null,
+    profile: chiefContext.profile,
+  }), [chiefContext]); // eslint-disable-line react-hooks/exhaustive-deps
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]
       .filter(p => !p.deleted && !p.isShaila && p.id !== "shaila")
@@ -3601,7 +3631,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                one" — was its own <div> above the list, doubling the header height). */
             headerActions={<>
               {googleAcctMenuEl}
-              <IconBtn icon="refresh" iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail" aria-label="Refresh mail" />
+              <IconBtn {...googleRefreshProps} iconSize={14} color={C.muted} title={googleLoading ? "Refreshing…" : "Refresh mail"} aria-label="Refresh mail" />
             </>}
             >
             {() => {
@@ -3759,7 +3789,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               {/* Add event was reachable from the stacked layout's card menu and from
                   the full panel, but not from the card grid (ticket PCkGDtd sweep). */}
               <IconBtn icon="add" iconSize={14} color={C.muted} onClick={() => setShowAddEvent(true)} title="Add event" aria-label="Add event" />
-              <IconBtn icon="refresh" iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh calendar" aria-label="Refresh calendar" />
+              <IconBtn {...googleRefreshProps} iconSize={14} color={C.muted} title={googleLoading ? "Refreshing…" : "Refresh calendar"} aria-label="Refresh calendar" />
               <IconBtn icon="schedule" iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
               <IconBtn icon="view_agenda" iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
             </>}>
@@ -4043,7 +4073,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               caption={signalNote("Calendar")}
               actions={[
                 { icon: "add",         label: "Add event",            run: () => { setMobileExpanded(prev => new Set(prev).add("cal")); setShowAddEvent(true); } },
-                { icon: "refresh",     label: "Refresh",              run: onRefreshCalendar || onConnectGoogle },
+                googleRefreshMenuItem(),
                 { icon: "open_in_new", label: "Open Google Calendar", run: () => window.open("https://calendar.google.com/calendar/r","_blank") },
                 ...googleAcctMenuItems,
                 { icon: "link_off",    label: "Disconnect",           run: onDisconnectGoogle },
@@ -4096,7 +4126,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             <NcCard {...sectionProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={(gmailMessages||[]).length}
               caption={signalNote("Mail")}
               actions={[
-                { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
+                googleRefreshMenuItem(),
                 { icon: "open_in_new", label: "Open Gmail", run: openGmailInbox },
                 ...googleAcctMenuItems,
               ]}
@@ -4555,7 +4585,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       {acctMenu}
                       <CardAction icon="add" title="Add event" onClick={() => setShowAddEvent(true)} />
                       <CardAction icon="open_in_new" title="Open Google Calendar" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" />
-                      <CardAction icon="refresh" title="Refresh" onClick={onRefreshCalendar || onConnectGoogle} />
+                      <CardAction {...googleRefreshProps} title={googleLoading ? "Refreshing…" : "Refresh"} />
                       <CardAction icon="link_off" title="Disconnect Google" onClick={onDisconnectGoogle} />
                     </>)}
                     {!calendarEvents ? (
@@ -4838,7 +4868,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     {googleLoading && <Spinner size={13} color={C.faint} />}
                     {googleAcctMenuEl}
                     <CardAction icon="open_in_new" title="Open Gmail" onClick={openGmailInbox} />
-                    <CardAction icon="refresh" title="Refresh mail and calendar" onClick={onRefreshCalendar || onConnectGoogle} />
+                    <CardAction {...googleRefreshProps} title={googleLoading ? "Refreshing…" : "Refresh mail and calendar"} />
                   </>)}
                   <div style={cardBody}>
                     {!gmailMessages ? (
