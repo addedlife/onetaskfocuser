@@ -18,6 +18,7 @@ import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
 import { BugLog } from './components/BugLog.jsx';
 import { DevEditMode } from './components/DevEditMode.jsx';
+import { UpdatePrompt } from './components/UpdatePrompt.jsx';
 
 // ONE NerveCenter surface (7/21/26). The "Next" / "legacy" split is gone: the M3
 // surface was already the default for the nervecenter view and already carried
@@ -4261,6 +4262,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {/* Noise texture */}
       <div style={{position:"fixed",inset:0,pointerEvents:"none",opacity:.025,backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`}}/>
 
+
+      {/* "A new version is ready" — deliberately outside the shell guard: a tab
+          sitting on a chromeless surface is the likeliest one to be stale, and
+          the offer to update must not depend on the rail being on screen. */}
+      <UpdatePrompt T={T} />
 
       {!shellHidden && (
         <AppSuiteChrome

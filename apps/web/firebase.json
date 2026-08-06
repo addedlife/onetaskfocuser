@@ -21,6 +21,11 @@
       {
         "source": "/manifest.webmanifest",
         "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
+      },
+      {
+        "//": "The update manifest. Must never be cached — a stale copy is exactly the thing it exists to detect.",
+        "source": "/version.json",
+        "headers": [{ "key": "Cache-Control", "value": "no-store, must-revalidate" }]
       }
     ],
     "rewrites": [

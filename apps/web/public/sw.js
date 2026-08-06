@@ -102,6 +102,12 @@ self.addEventListener("fetch", (event) => {
   // iOS and Android). Returning here leaves them to the browser's normal network fetch.
   if (url.origin === self.location.origin && url.pathname.startsWith("/__/")) return;
 
+  // Never intercept /version.json. It is the manifest the running app polls to
+  // find out whether a newer build is live (src/update-watcher.js), so answering
+  // it from cache — or falling back to index.html after the networkFirst timeout —
+  // would make the one file whose whole job is freshness report stale news.
+  if (url.origin === self.location.origin && url.pathname === "/version.json") return;
+
   if (!shouldRuntimeCache(event.request)) return;
   if (event.request.mode === "navigate") {
     event.respondWith(networkFirst(event.request));

@@ -5,10 +5,16 @@ import { DeskPhoneWebPanel } from './10-deskphone-web.jsx';
 import { RelayTesterPage } from './11-relay-tester.jsx';
 import { GV_CLEAN } from './08-app-split/ui-tokens.jsx';
 import { registerOfflineShell } from './offline-support.js';
+import { recordBootVersion } from './update-watcher.js';
 import { initProcessLog, setProcessLogContext } from './08-app-split/process-log.js';
 import { APP_VERSION } from './version.js';
 
 registerOfflineShell();
+
+// Before anything renders: if this bundle's version differs from the one this
+// browser ran last, the load happening right now is what applied the update, and
+// the rail's five-minute "just updated" pill keys off the moment stamped here.
+recordBootVersion();
 
 // Per-surface process log (owner tickets 7/29). Restored from this device's
 // localStorage before the first render, so Settings → Process log still holds

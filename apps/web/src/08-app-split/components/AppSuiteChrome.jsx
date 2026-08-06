@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { cleanTheme, DUR, EASE, ELEV, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, suiteIcon, M3_MIN_TARGET } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
+import { JUST_UPDATED_WINDOW_MS, readJustUpdated } from '../../update-watcher.js';
 import { Store, textOnColor } from '../../01-core.js';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
 import { preferredHostId, HANDOFF_GRACE_MS } from '../phone-link.js';
@@ -336,6 +337,19 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
 
   const rawNow = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
   const now = Number.isFinite(rawNow.getTime()) ? rawNow : new Date();
+
+  // "Just updated" pill — five minutes after a reload that actually landed on a
+  // new version, then it fades and never comes back for that version. Read once
+  // on mount (localStorage, written at boot in main.jsx) and cleared by a single
+  // timer rather than being recomputed off the clock tick, so an idle rail is not
+  // re-rendering this every second for five minutes.
+  const [justUpdated, setJustUpdated] = React.useState(() => readJustUpdated());
+  React.useEffect(() => {
+    if (!justUpdated) return undefined;
+    const remaining = Math.max(0, JUST_UPDATED_WINDOW_MS - (Date.now() - justUpdated.at));
+    const t = setTimeout(() => setJustUpdated(null), remaining);
+    return () => clearTimeout(t);
+  }, [justUpdated]);
   // Expanded: "2:56 AM" — Collapsed: "2:56a" (no space, single letter) to fit 44px
   const railTimeFull = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const railTime = displayOpen
@@ -1055,6 +1069,34 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
           const ls = { fontSize: NC_TYPE.small, color: C.faint, opacity: 0.7, lineHeight: 1.15, fontFamily: NC_FONT_STACK, letterSpacing: 0.1, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
           return (<><span style={{ ...ls, opacity: 0.55, textTransform: "uppercase", letterSpacing: 0.6 }}>upd</span><span style={ls}>{sv.date}</span>{sv.time && <span style={ls}>{sv.time}</span>}</>);
         })()}
+
+        {/* Five-minute "you are now on the new one" pill. Only ever appears after
+            a reload that genuinely changed version, so it is news rather than
+            decoration — which is why it is allowed to be the one accented thing
+            down here, and why it removes itself. */}
+        {justUpdated && (
+          <span
+            title={`Updated to v${justUpdated.version}${justUpdated.from ? ` from v${justUpdated.from}` : ''} at ${new Date(justUpdated.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
+            style={{
+              marginTop: 4, maxWidth: "100%", boxSizing: "border-box",
+              padding: displayOpen ? "3px 9px" : "3px 5px",
+              borderRadius: RADIUS.pill,
+              background: `color-mix(in srgb, ${C.accent} 16%, transparent)`,
+              color: C.accent, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small,
+              fontWeight: `var(--nc-fw-semibold, 600)`, lineHeight: 1.25,
+              // Wraps rather than truncating: the rail's interior is ~159px and the
+              // full sentence needs ~196px, so nowrap ellipsised it to "Just updated
+              // at 4:46 PM to v4.11…" — losing the version, which is the one part
+              // that has to survive. Two short centred lines fit with room to spare.
+              textAlign: "center", whiteSpace: "normal", wordBreak: "break-word",
+              fontVariantNumeric: "tabular-nums",
+              animation: `ncJustUpdatedFade ${Math.round(JUST_UPDATED_WINDOW_MS / 1000)}s ${EASE.standard} forwards`,
+            }}>
+            {displayOpen
+              ? `Just updated at ${new Date(justUpdated.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} to v${justUpdated.version}`
+              : `new v${justUpdated.version}`}
+          </span>
+        )}
       </div>
 
       </div>{/* ── end utility cluster ── */}

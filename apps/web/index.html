@@ -58,6 +58,9 @@ body{font-family:'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,san
 @keyframes ot-done-fade{0%{opacity:0;transform:translateY(6px)}30%{opacity:1;transform:translateY(0)}70%{opacity:1}100%{opacity:0;transform:translateY(-4px)}}
 @keyframes ot-age-pulse{0%{opacity:.6}50%{opacity:1}100%{opacity:.6}}
 @keyframes ot-postit-in{from{opacity:0;transform:scale(0.55) translateY(24px)}to{opacity:1;transform:scale(1) translateY(0)}}
+/* Rail "just updated" pill: fades in fast, holds for most of its five minutes,
+   then fades out on its own so it never becomes permanent furniture. */
+@keyframes ncJustUpdatedFade{0%{opacity:0;transform:translateY(3px)}2%{opacity:1;transform:translateY(0)}88%{opacity:1}100%{opacity:0;transform:translateY(-2px)}}
 @keyframes ot-fan-out{from{opacity:0;scale:0.3}to{opacity:1;scale:1}}
 @keyframes ot-queue-toast{0%{opacity:0;transform:translateX(-50%) translateY(4px)}10%{opacity:1;transform:translateX(-50%) translateY(0)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-4px)}}
 @keyframes ot-postit-scroll{0%{transform:translateY(0)}100%{transform:translateY(-50%)}}
