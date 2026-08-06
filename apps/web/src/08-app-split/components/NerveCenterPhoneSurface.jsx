@@ -9,6 +9,7 @@ import {
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
 } from '../utils/pending-sms.js';
 import { commandChannelHealth } from '../utils/relay-health.js';
+import { createAckTracker } from '../utils/ack-wait.js';
 import { cachedPhoneMedia, loadPhoneMedia } from '../utils/phone-media.js';
 import {
   detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun,
@@ -32,7 +33,13 @@ const CALL_SEEN_KEY = 'shamash_phone_call_first_seen';
 // mid-send. 35 s clears that margin. Both waits are named once here so the
 // numbers in the log text cannot drift away from the numbers in the code.
 const ACK_WAIT_MS = 35000;
-const LATE_ACK_WAIT_MS = 65000;
+// The host refuses to execute a /send older than 120 s (CommandTtl in
+// RelayService.cs), so until that TTL lapses the command may still legitimately
+// run and a "failed" verdict can be contradicted by the phone. The two waits
+// together now outlast it: 35 + 90 = 125 s. Sends are background work — the
+// composer cleared the moment you hit send and the bubble reads "Sending…" —
+// so a longer wait costs the owner no waiting, only a later final bubble.
+const LATE_ACK_WAIT_MS = 90000;
 const secs = ms => Math.round(ms / 1000);
 // All liveness/staleness windows and age labels live in phone-link.js — the
 // shared state machine both phone surfaces derive from.
@@ -415,26 +422,41 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // DeskPhone acknowledges every relayed command by id inside the state blob it
   // pushes (commandResults). post() awaits the ack for its command id, so success
   // means DeskPhone REALLY ran the command — not just that the cloud queued it.
-  const recentAcksRef = useRef(new Map());   // command id → { ok, error, completedAt }
-  const ackWaitersRef = useRef(new Map());   // command id → resolve(ack)
+  // The tracker (utils/ack-wait.js) owns the waiting for both phone surfaces and
+  // is unit-tested without React (tests/ack-wait.test.mjs).
+  const ackTrackerRef = useRef(null);
+  if (!ackTrackerRef.current) ackTrackerRef.current = createAckTracker();
   const processCommandResults = useCallback((results) => {
-    if (!Array.isArray(results)) return;
-    results.forEach(r => {
-      if (!r?.id || recentAcksRef.current.has(r.id)) return;
-      recentAcksRef.current.set(r.id, r);
-      while (recentAcksRef.current.size > 60) {
-        recentAcksRef.current.delete(recentAcksRef.current.keys().next().value);
-      }
-      const waiter = ackWaitersRef.current.get(r.id);
-      if (waiter) { ackWaitersRef.current.delete(r.id); waiter(r); }
-    });
+    ackTrackerRef.current.record(results);
   }, []);
-  const waitForAck = useCallback((id, timeoutMs) => new Promise(resolve => {
-    const existing = recentAcksRef.current.get(id);
-    if (existing) { resolve(existing); return; }
-    const timer = setTimeout(() => { ackWaitersRef.current.delete(id); resolve(null); }, timeoutMs);
-    ackWaitersRef.current.set(id, ack => { clearTimeout(timer); resolve(ack); });
-  }), []);
+
+  // This surface runs NO periodic REST poll once seeded — updates arrive through
+  // the onSnapshot listener. That is fine for the feed, but it meant an ack wait
+  // had nothing feeding it whenever the listener was slow or not delivering, so
+  // the wait expired no matter how long it was and a send the host really made
+  // was reported as failed (owner ticket PZw6eQft, second report). During a wait
+  // we go and ask on our own cadence instead of waiting to be told.
+  const ACK_POLL_MS = 3000;
+  const pollAcksOnce = useCallback(async () => {
+    const tok = user?.getIdToken ? await user.getIdToken() : null;
+    if (!tok) return;
+    const blob = await fetchPhoneJson(
+      `${RELAY_BASE}?action=state`,
+      PHONE_FETCH_TIMEOUT_MS,
+      { Authorization: `Bearer ${tok}` },
+    );
+    processCommandResults(blob?.commandResults);
+  }, [user, processCommandResults]);
+
+  // pollMs is per-wait: the first wait polls briskly because that is where the
+  // answer usually is, the long tail polls at half the rate so a stuck command
+  // cannot quietly rack up relay calls for two minutes.
+  const waitForAck = useCallback(
+    (id, timeoutMs, pollMs = ACK_POLL_MS) => ackTrackerRef.current.awaitAck(id, {
+      timeoutMs, pollMs, poll: pollAcksOnce,
+    }),
+    [pollAcksOnce],
+  );
 
   // Apply a phone-state payload (from either the direct LAN poll or the cloud-relay
   // listener) to component state. Signature refs short-circuit redundant re-renders,
@@ -777,8 +799,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         step(`waiting for the host's acknowledgement (up to ${secs(ACK_WAIT_MS)}s)`);
         // Await the host acknowledgement — it rides the state pushes we already
         // receive. No ack in this window means no live host accepted the command.
-        const ack = await waitForAck(queued.id, ACK_WAIT_MS);
+        let ack = await waitForAck(queued.id, ACK_WAIT_MS);
         await refresh();
+        // The refresh above very often carries the very ack we just stopped
+        // waiting for. Branching on the stale null is how a send the host really
+        // made got reported as failed (owner ticket PZw6eQft).
+        if (!ack) ack = ackTrackerRef.current.get(queued.id);
         if (ack && !ack.ok) {
           const msg = ack.error || "The phone host could not run the command.";
           step("host ran it and reported FAILURE", "fail", msg);
@@ -815,8 +841,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           // Never claim failure while that's possible — wait out a slow ack.
           step("already gone from the mailbox — a host DID take it", "warn",
             `waiting a further ${secs(LATE_ACK_WAIT_MS)}s for a slow acknowledgement rather than reporting a failure that may still deliver`);
-          const lateAck = await waitForAck(queued.id, LATE_ACK_WAIT_MS);
+          let lateAck = await waitForAck(queued.id, LATE_ACK_WAIT_MS, ACK_POLL_MS * 2);
           await refresh();
+          if (!lateAck) lateAck = ackTrackerRef.current.get(queued.id);
           if (lateAck && lateAck.ok) {
             step("late acknowledgement arrived — the host ran it", "ok");
             if (!opts.background) setError("");

@@ -12,6 +12,7 @@ import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMes
 import { TextField as DpTextField, IconButton as DpIconButton } from './08-app-split/m3.jsx';
 import { subscribeOwner, rememberHandshake, lastHandshakeMs } from './08-app-split/phone-host-control.js';
 import { commandChannelHealth } from './08-app-split/utils/relay-health.js';
+import { createAckTracker } from './08-app-split/utils/ack-wait.js';
 import { hydrateMessagesWithMedia } from './08-app-split/utils/phone-media.js';
 import { detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun } from './08-app-split/process-log.js';
 import { commandAvailability, explainAckError } from './08-app-split/phone-command-availability.js';
@@ -28,8 +29,11 @@ const RELAY_BASE = "/api/phone-relay";
 // UI calls it failed (host drain tick ≈4 s + state push ≈3 s + relay latency).
 // 30 s was landing just short of a real send's confirmation on a slow link
 // (owner ticket PZw6eQft), so a good send reported as failed. Matches the
-// NerveCenter phone surface's ACK_WAIT_MS.
+// NerveCenter phone surface's ACK_WAIT_MS / LATE_ACK_WAIT_MS — the host refuses
+// to run a /send older than 120 s, so the two waits together must outlast that
+// TTL before any failure verdict is safe to state.
 const CLOUD_ACK_TIMEOUT_MS = 35000;
+const CLOUD_LATE_ACK_TIMEOUT_MS = 90000;
 // Liveness windows + status wording come from the shared phone-link.js state
 // machine — this page and the NerveCenter card can no longer disagree.
 
@@ -6372,16 +6376,12 @@ export function DeskPhoneWebPanel({
   // command, not merely that the cloud queued it (owner incident 7/17: sends
   // showed "Sent" while the mailbox sat undrained for 12 hours and nothing
   // ever reached the phone).
-  const recentAcksRef = useRef(new Map());   // command id → { ok, error, completedAt }
+  // Shared tracker (utils/ack-wait.js) — the same waiting code the NerveCenter
+  // card uses, so the two surfaces cannot drift apart on what "sent" means.
+  const ackTrackerRef = useRef(null);
+  if (!ackTrackerRef.current) ackTrackerRef.current = createAckTracker();
   const processCommandResults = useCallback((results) => {
-    if (!Array.isArray(results)) return;
-    results.forEach((r) => {
-      if (!r?.id || recentAcksRef.current.has(r.id)) return;
-      recentAcksRef.current.set(r.id, r);
-      while (recentAcksRef.current.size > 60) {
-        recentAcksRef.current.delete(recentAcksRef.current.keys().next().value);
-      }
-    });
+    ackTrackerRef.current.record(results);
   }, []);
 
   // Reads the relay state blob (same doc the NerveCenter card reads) — fed by
@@ -6636,16 +6636,10 @@ export function DeskPhoneWebPanel({
   // Poll for the host's ack of a queued cloud command (commandResults in the
   // state blob). Resolves with the ack ({ ok, error }) or null on timeout —
   // null means NO host ever drained the command.
-  const waitForCloudAck = useCallback(async (id, timeoutMs) => {
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-      const ack = recentAcksRef.current.get(id);
-      if (ack) return ack;
-      if (Date.now() >= deadline) return null;
-      await new Promise((r) => setTimeout(r, 2500));
-      try { await refresh(); } catch (_) { /* transient — keep polling to deadline */ }
-    }
-  }, [refresh]);
+  const waitForCloudAck = useCallback(
+    (id, timeoutMs) => ackTrackerRef.current.awaitAck(id, { timeoutMs, pollMs: 2500, poll: refresh }),
+    [refresh],
+  );
 
   // Withdraw a queued cloud command from the relay mailbox. Returns true only
   // when it was still queued (= no host ever saw it); false means a host
@@ -6689,8 +6683,11 @@ export function DeskPhoneWebPanel({
       return;
     }
     step(`waiting for the host's acknowledgement (up to ${Math.round(CLOUD_ACK_TIMEOUT_MS / 1000)}s)`);
-    const ack = await waitForCloudAck(cmdId, CLOUD_ACK_TIMEOUT_MS);
+    let ack = await waitForCloudAck(cmdId, CLOUD_ACK_TIMEOUT_MS);
     await refresh();
+    // That refresh often carries the ack we just stopped waiting for — reading
+    // the stale null is how a send the host made was called failed.
+    if (!ack) ack = ackTrackerRef.current.get(cmdId);
     if (ack && !ack.ok) {
       const explained = explainAckError(ack.error, path, linkRef.current?.activeHostId || "");
       step("host ran it and reported FAILURE", "fail", explained);
@@ -6710,16 +6707,17 @@ export function DeskPhoneWebPanel({
       // A host already drained it and may be mid-run — wait out a slow ack
       // rather than reporting a failure that could become a duplicate send.
       step("already gone from the mailbox — a host DID take it", "warn",
-        "waiting a further 65s for a slow acknowledgement rather than reporting a failure that may still deliver");
-      const lateAck = await waitForCloudAck(cmdId, 65000);
+        `waiting a further ${Math.round(CLOUD_LATE_ACK_TIMEOUT_MS / 1000)}s for a slow acknowledgement rather than reporting a failure that may still deliver`);
+      let lateAck = await waitForCloudAck(cmdId, CLOUD_LATE_ACK_TIMEOUT_MS);
       await refresh();
+      if (!lateAck) lateAck = ackTrackerRef.current.get(cmdId);
       if (lateAck && lateAck.ok) { step("late acknowledgement arrived — the host ran it", "ok"); return; }
       if (lateAck) {
         const explained = explainAckError(lateAck.error, path, linkRef.current?.activeHostId || "");
         step("late acknowledgement says it FAILED", "fail", explained);
         throw new Error(explained || "Your phone host reported the command failed.");
       }
-      step("no acknowledgement after 95s total", "fail",
+      step(`no acknowledgement after ${Math.round((CLOUD_ACK_TIMEOUT_MS + CLOUD_LATE_ACK_TIMEOUT_MS) / 1000)}s total`, "fail",
         "the host drained the command but its state push never carried the ack back");
       throw new Error("The host took this command but never confirmed it ran. It may or may not have gone out — check the thread before resending.");
     }
