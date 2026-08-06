@@ -145,7 +145,10 @@ class HostService : Service() {
         // Delta-sync poll (MNS push is primary; this is the safety net)
         executor.scheduleWithFixedDelay({
             runCatching {
-                if (map.isConnected && !realOpActive) {
+                // A live call owns the Bluetooth link: MAP traffic over the same
+                // adapter while SCO audio is up is what makes calls break up
+                // (owner ticket 4u7TNiCh). The next tick picks it up 30 s later.
+                if (map.isConnected && !realOpActive && !isCallActive()) {
                     val newMsgs = map.performDeltaSync()
                     if (newMsgs.isNotEmpty()) {
                         val added = messageStore.merge(newMsgs)
@@ -170,7 +173,10 @@ class HostService : Service() {
         // PBAP refresh: hourly call-log/contact import while connected
         executor.scheduleWithFixedDelay({
             runCatching {
-                if (isFullyConnected() && System.currentTimeMillis() - lastPbapImportAt > 60 * 60_000) {
+                // Same rule as the delta poll — a full PBAP phonebook/call-log pull
+                // is the heaviest OBEX job here and must never share the link with a
+                // live call. It simply waits for the next 10-minute tick.
+                if (isFullyConnected() && !isCallActive() && System.currentTimeMillis() - lastPbapImportAt > 60 * 60_000) {
                     runPbapImport()
                 }
             }
@@ -337,7 +343,11 @@ class HostService : Service() {
             try {
                 map.fullHistoryLoad(
                     knownHandles = messageStore.knownHandles(),
-                    isPaused = { realOpActive || sending.get() },
+                    // The history backfill is a continuous stream of OBEX listing pages
+                    // and message-body GETs — the heaviest thing this host does. It now
+                    // pauses for the whole of any call (ringing, dialing or active) and
+                    // resumes by itself afterwards, keeping its place (ticket 4u7TNiCh).
+                    isPaused = { realOpActive || sending.get() || isCallActive() },
                     onBatch = { batch ->
                         val added = messageStore.merge(batch)
                         if (added > 0) HostLog.add("[FULLHIST] merged +$added")

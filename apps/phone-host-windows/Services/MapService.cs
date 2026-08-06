@@ -569,7 +569,7 @@ public class MapService : IAsyncDisposable
                         {
                             // Log the pause once, not once per 300 ms check — the old
                             // per-iteration line flooded the debug log (~3 lines/sec).
-                            MapLogLine?.Invoke("[FULLHIST] Paused for real op…");
+                            MapLogLine?.Invoke("[FULLHIST] Paused — a call is live or a real operation is using the link…");
                             var pausedAtUtc = DateTime.UtcNow;
                             while (isPaused()) await Task.Delay(300, ct);
                             MapLogLine?.Invoke($"[FULLHIST] Resumed after {(DateTime.UtcNow - pausedAtUtc).TotalSeconds:0.0}s");

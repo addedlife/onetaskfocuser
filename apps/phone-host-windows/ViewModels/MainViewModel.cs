@@ -6476,6 +6476,18 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     knownHandles,
                     isPaused: () => {
                         if (PauseHistoryActivity) throw new OperationCanceledException("Paused by user");
+                        // A live call owns the Bluetooth link. The delta poll loop has
+                        // deferred during calls since it was written ("hammering MAP RFCOMM
+                        // while SCO audio is live can make the phone unresponsive on the AT
+                        // channel"), but the full-history backfill — which is far heavier
+                        // than the poll: back-to-back OBEX listing pages and message-body
+                        // GETs, MMS included, for as long as it takes — never checked, so it
+                        // kept streaming straight through every call. That is the "constant
+                        // BT polling stream" behind owner ticket 4u7TNiCh (calls cutting out
+                        // while connected). It pauses within one message body and resumes by
+                        // itself the moment the call ends; no offset or handle is lost,
+                        // because the loop resumes rather than restarts.
+                        if (CurrentCall.Status != CallStatus.Idle) return true;
                         return IsRealOpActive || _isHistoryPriorityPaused || Volatile.Read(ref _pendingPriorityMessageSync) != 0;
                     },
                     onBatch: (batch, batchIdx, total) =>
