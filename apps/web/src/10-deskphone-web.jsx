@@ -1388,6 +1388,7 @@ function ReconnectPrompt({ visible, status, onConnect, onChooseDevice, onDismiss
   }
   return (
     <div className="dp-prompt dp-reconnect-prompt" data-native-source="MainWindow.xaml:788">
+      <div className="dp-prompt-leading" aria-hidden="true">{icon("sync", 20)}</div>
       <div className="dp-prompt-text">
         <div className="dp-prompt-title">{`Refresh ${hostDeviceName(status)}?`}</div>
         <div className="dp-prompt-subtitle">This screen will ask this device for the latest phone status.</div>
@@ -1427,18 +1428,25 @@ function BuildUpdateOverlay({ showPrompt, showIndicator, title, body, onShowProm
     <>
       {showPrompt ? (
         <div className="dp-build-overlay" data-native-source="MainWindow.xaml:855">
-          <div className="dp-build-dialog">
-            <h2>{title || "A newer DeskPhone is ready"}</h2>
+          <div
+            className="dp-build-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dp-build-dialog-title"
+            aria-describedby="dp-build-dialog-body"
+          >
+            <div className="dp-build-dialog-icon" aria-hidden="true">{icon("system_update_alt", 24)}</div>
+            <h2 id="dp-build-dialog-title">{title || "A newer DeskPhone is ready"}</h2>
             {/* Owner ticket: the default body read "the host exposes the update
                 action to the web shell", which says nothing to the person being
                 asked a yes/no question. Say what happens if they say yes. */}
-            <p>{body || "Switching takes a few seconds and reconnects your phone on its own. Nothing in your texts or call history changes."}</p>
+            <p id="dp-build-dialog-body">{body || "Switching takes a few seconds and reconnects your phone on its own. Nothing in your texts or call history changes."}</p>
             <div className="dp-build-dialog-actions">
-              <ShellButton className="dp-primary" nativeSource="MainWindow.xaml:882" onClick={onAccept}>
-                Use New Build
+              <ShellButton className="dp-text-button" nativeSource="MainWindow.xaml:887" onClick={onSnooze}>
+                Not now
               </ShellButton>
-              <ShellButton className="dp-tonal" nativeSource="MainWindow.xaml:887" onClick={onSnooze}>
-                Not Yet
+              <ShellButton className="dp-primary" nativeSource="MainWindow.xaml:882" onClick={onAccept}>
+                Update now
               </ShellButton>
             </div>
           </div>
@@ -1446,8 +1454,8 @@ function BuildUpdateOverlay({ showPrompt, showIndicator, title, body, onShowProm
       ) : null}
       {showIndicator ? (
         <div className="dp-build-indicator" data-native-source="MainWindow.xaml:897">
-          <ShellButton className="dp-tonal" iconName="notifications" nativeSource="MainWindow.xaml:904" onClick={onShowPrompt}>
-            New Build Available
+          <ShellButton className="dp-tonal dp-build-indicator-button" iconName="system_update_alt" nativeSource="MainWindow.xaml:904" onClick={onShowPrompt}>
+            Update ready
           </ShellButton>
         </div>
       ) : null}
@@ -3969,21 +3977,36 @@ const css = `
 }
 .dp-prompt {
   margin: 16px 24px 0;
-  border-radius: 8px;
-  padding: 13px 18px;
+  border-radius: 12px;
+  padding: 14px 18px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   gap: 8px;
   align-items: center;
+  animation: dp-prompt-in 180ms cubic-bezier(0.2, 0, 0, 1) both;
 }
 .dp-reconnect-prompt {
   background: var(--dp-bg-input);
   border: 1px solid var(--dp-border);
 }
-.dp-prompt-title {
+.dp-prompt-leading {
+  width: 36px;
+  height: 36px;
+  margin-right: 4px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--dp-bg-selected);
   color: var(--dp-blue);
-  font-size: 14px;
+}
+.dp-prompt-title {
+  color: var(--dp-text);
+  font-size: 15px;
   font-weight: var(--nc-fw-medium, 500);
+}
+@keyframes dp-prompt-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
 }
 .dp-prompt-subtitle {
   margin-top: 2px;
@@ -3996,40 +4019,77 @@ const css = `
   top: 16px;
   right: 24px;
 }
+.dp-build-indicator-button {
+  border-radius: 20px;
+  background: var(--dp-bg-selected);
+  color: var(--dp-blue);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+}
 .dp-build-overlay {
   position: absolute;
   inset: 0;
   z-index: 520;
-  background: rgba(8, 20, 32, 0.4);
+  background: rgba(8, 20, 32, 0.32);
   display: grid;
   place-items: center;
   padding: 24px;
+  animation: dp-scrim-in 150ms linear both;
 }
 .dp-build-dialog {
-  width: min(460px, 100%);
-  border-radius: 8px;
-  border: 1px solid var(--dp-border);
+  width: min(420px, 100%);
+  border-radius: 28px;
   background: var(--dp-bg-main);
   padding: 24px;
   box-sizing: border-box;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(60, 64, 67, 0.18);
+  animation: dp-dialog-in 200ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+.dp-build-dialog-icon {
+  width: 24px;
+  height: 24px;
+  margin: 0 auto 16px;
+  color: var(--dp-blue);
+  display: grid;
+  place-items: center;
 }
 .dp-build-dialog h2 {
   margin: 0;
   color: var(--dp-text);
-  font-size: 22px;
-  font-weight: var(--nc-fw-medium, 500);
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: var(--nc-fw-regular, 400);
 }
 .dp-build-dialog p {
-  margin: 12px 0 0;
+  margin: 16px 0 0;
   color: var(--dp-text-second);
   font-size: 14px;
-  line-height: 22px;
+  line-height: 20px;
 }
 .dp-build-dialog-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 20px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+.dp-build-dialog .dp-md-button {
+  border-radius: 20px;
+}
+@keyframes dp-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dp-dialog-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dp-prompt,
+  .dp-build-overlay,
+  .dp-build-dialog {
+    animation: none;
+  }
 }
 .dp-call-banner {
   margin: 12px 24px 0;
@@ -4109,6 +4169,13 @@ const css = `
 .dp-tonal.is-muted {
   background: var(--dp-red-light);
   color: var(--dp-red);
+}
+.dp-text-button {
+  background: transparent;
+  color: var(--dp-blue);
+}
+.dp-text-button:hover {
+  background: var(--dp-bg-hover);
 }
 .dp-tab-area {
   min-height: 0;
@@ -5953,6 +6020,9 @@ const css = `
   .dp-call-banner {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+  .dp-prompt-leading {
+    display: none;
   }
   .dp-call-actions {
     flex-wrap: wrap;
