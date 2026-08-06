@@ -8,6 +8,7 @@
 // fetches. That is what makes it instant, free, and usable offline.
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { cleanTheme, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
 import { Dialog, TextField, FilterChip, ChipSet, List, ListItem, Divider, denseListVars } from '../m3.jsx';
 import {
@@ -175,7 +176,11 @@ export function UniversalSearch({ open, onClose, onSelectSurface, T }) {
   const hasQuery = debounced.trim().length >= 2;
   let index = -1;
 
-  return (
+  // Portalled to <body>: rendered in place it landed inside the suite root's
+  // overflow:hidden box and laid its content out off-screen (the owner saw two
+  // stray outline strokes and no input). The rail's own popovers portal for the
+  // same reason.
+  return createPortal((
     <Dialog
       open={!!open}
       onClosed={() => onClose?.()}
@@ -186,20 +191,34 @@ export function UniversalSearch({ open, onClose, onSelectSurface, T }) {
         maxHeight: '82vh',
       }}
     >
-      <div slot="headline" style={{ display: 'flex', alignItems: 'center', gap: SP.sm, width: '100%' }}>
+      {/* The field lives in `content`, NOT `headline`. md-dialog's headline slot
+          is an intrinsically-sized flex row, and md-outlined-text-field there
+          blew out to ~2000px wide and slid off the left edge — the owner saw two
+          stray outline strokes and no input. */}
+      <div slot="headline" style={{ display: 'flex', alignItems: 'center', gap: SP.sm, minWidth: 0, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title, fontWeight: `var(--nc-fw-semibold, 600)`, color: C.text }}>
         <span style={{ color: C.accent, display: 'inline-flex' }}>{suiteIcon('search', 22)}</span>
+        <span>Search everything</span>
+      </div>
+
+      <div slot="content" style={{ padding: `0 ${SP.sm}`, fontFamily: NC_FONT_STACK }}>
         <TextField
           ref={inputRef}
           value={query}
           onInput={e => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Search everything — tasks, mail, calendar, texts…"
+          placeholder="Tasks, mail, calendar, texts…"
           aria-label="Search everything"
-          style={{ flex: 1, '--md-outlined-text-field-container-shape': RADIUS.pill }}
+          style={{
+            display: 'block', width: '100%', boxSizing: 'border-box', marginBottom: SP.sm,
+            // md-outlined-text-field's internal input-wrapper reports three times
+            // the field's width (665 → 2002). Left unclipped that becomes the
+            // dialog scroller's scrollWidth, and focusing the input scrolled the
+            // whole card 671px sideways — the owner saw two outline strokes and
+            // no input. Clipping the host keeps the overflow out of the scroller.
+            overflow: 'hidden',
+            '--md-outlined-text-field-container-shape': RADIUS.pill,
+          }}
         />
-      </div>
-
-      <div slot="content" style={{ padding: 0, fontFamily: NC_FONT_STACK }}>
         {availableSources.length > 1 && (
           <ChipSet style={{ display: 'flex', flexWrap: 'wrap', gap: SP.xs, padding: `0 0 ${SP.sm}` }}>
             {availableSources.map(id => (
@@ -285,7 +304,7 @@ export function UniversalSearch({ open, onClose, onSelectSurface, T }) {
         )}
       </div>
     </Dialog>
-  );
+  ), document.body);
 }
 
 export default UniversalSearch;

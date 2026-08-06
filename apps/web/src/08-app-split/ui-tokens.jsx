@@ -663,6 +663,13 @@ md-filled-button[trailing-icon], md-filled-tonal-button[trailing-icon], md-outli
 md-text-button { padding-inline: 12px; }
 md-text-button[has-icon]:not([trailing-icon]) { padding-inline: 12px 16px; }
 md-text-button[trailing-icon] { padding-inline: 16px 12px; }
+/* The same global-reset trap, one component over. The index.html reset zeroes
+   margin on every element including the md-dialog host, and M3's internal
+   dialog element inherits margin — so the auto margin that centres a fixed
+   dialog was zeroed and every dialog pinned itself to the top-left corner,
+   dragging its slotted content off-screen with it. Restoring it on the host is
+   enough: the shadow node inherits. */
+md-dialog { margin: auto; }
 .nc-suite-root * {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
