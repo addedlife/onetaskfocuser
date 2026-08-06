@@ -1343,8 +1343,24 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       {(!composeIsNew || selected) && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 36px", gap: 6, alignItems: "flex-end" }}>
           <textarea ref={composeBodyRef} value={body} onChange={e => setBody(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSms(); } }}
+            onKeyDown={e => {
+              if (e.key !== "Enter") return;
+              // Shift+Enter gets a newline natively; Ctrl/Cmd/Alt+Enter do not,
+              // so they are inserted by hand. Bare Enter still sends.
+              if (e.shiftKey) return;
+              e.preventDefault();
+              if (e.ctrlKey || e.metaKey || e.altKey) {
+                const field = e.target;
+                const start = field.selectionStart ?? field.value.length;
+                const end = field.selectionEnd ?? start;
+                setBody(`${field.value.slice(0, start)}\n${field.value.slice(end)}`);
+                window.requestAnimationFrame(() => { field.selectionStart = field.selectionEnd = start + 1; });
+                return;
+              }
+              sendSms();
+            }}
             placeholder="Message..." rows={2}
+            title="Enter sends · Shift+Enter starts a new line"
             style={{ boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: `${SP.sm} ${SP.md}`, fontSize: NC_TYPE.body, fontFamily: NC_FONT_STACK, resize: "none", outline: "none", width: "100%" }} />
           <button onClick={sendSms} disabled={!body.trim() || !!busy || (!selected && !number.trim())}
             style={{ width: 40, height: 40, borderRadius: RADIUS.pill, border: "none", background: body.trim() ? C.accent : "transparent", color: body.trim() ? "#fff" : C.faint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: `background ${DUR.fast} ${EASE.standard}`, flexShrink: 0 }}>

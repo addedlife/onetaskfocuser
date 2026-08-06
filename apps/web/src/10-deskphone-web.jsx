@@ -571,6 +571,18 @@ async function composeAttachmentUpload(attachment) {
 // background and flips the echo to Failed (with Retry) if it doesn't go through.
 // Requires an onCommand that THROWS on failure when passed { background: true }.
 // `echoId` reuses an existing echo bubble for retries instead of adding another.
+// Insert a line break at the caret and keep the caret after it. Used for the
+// modifier+Enter combinations a textarea does not handle natively.
+function insertNewlineAtCursor(field, setValue) {
+  const start = field.selectionStart ?? field.value.length;
+  const end = field.selectionEnd ?? start;
+  const next = `${field.value.slice(0, start)}\n${field.value.slice(end)}`;
+  setValue(next);
+  window.requestAnimationFrame(() => {
+    field.selectionStart = field.selectionEnd = start + 1;
+  });
+}
+
 function sendComposeMessage({ onCommand, to, body, attachments, label, echoId = null }) {
   const phone = String(to || "").trim();
   const text = String(body || "").trim();
@@ -2768,13 +2780,22 @@ function MessagesSlice({
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.ctrlKey && !event.metaKey) {
-                        event.preventDefault();
-                        sendMessage();
+                      if (event.key !== "Enter") return;
+                      // Owner ticket: Enter sent with no way to reach a second
+                      // line. Any modifier + Enter now inserts a real newline —
+                      // Shift+Enter gets it natively, Ctrl/Cmd/Alt+Enter do not,
+                      // so those are inserted by hand. Bare Enter still sends.
+                      if (event.shiftKey) return;
+                      event.preventDefault();
+                      if (event.ctrlKey || event.metaKey || event.altKey) {
+                        insertNewlineAtCursor(event.target, setDraft);
+                        return;
                       }
+                      sendMessage();
                     }}
                     minLength={0}
                     placeholder="Message text"
+                    title="Enter sends · Shift+Enter starts a new line"
                     aria-label="Message text"
                     data-automation-id="ReplyComposeBox"
                   />
@@ -4243,7 +4264,11 @@ const css = `
   border-radius: 4px;
   padding: 10px 11px;
   resize: vertical;
-  color: var(--dp-text);
+  /* Owner ticket: this was the ONLY field in the panel with no background of
+     its own, so it fell back to the browser default field colour (white) while the
+     text stayed theme-light — white on white in any dark theme. */
+  background: var(--dp-control-bg);
+  color: var(--dp-control-text);
   font: 400 14px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }
 .dp-compose-contact-list {
