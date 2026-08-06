@@ -715,6 +715,20 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               </div>
               <Switch selected={AS.features?.health===true} onChange={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,health:!ft.health}};})} style={switchVars} />
             </div>
+
+            <div style={{height:1,background:T.brdS,margin:"0 0 18px"}}/>
+
+            <div style={rowSB}>
+              <div>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text}}>Dev edit mode</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,lineHeight:settingsType.line}}>
+                  Puts a pencil and a garbage can on every button and text box, like wiggling apps on a phone home screen.
+                  The app keeps working; whatever you write goes straight into the Bug Log with the button, the screen and
+                  the version already filled in. A floating Exit button turns it back off from anywhere.
+                </p>
+              </div>
+              <Switch selected={AS.features?.devEditMode===true} onChange={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,devEditMode:!ft.devEditMode}};})} style={switchVars} />
+            </div>
           </div>
         )}
 

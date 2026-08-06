@@ -17,6 +17,7 @@ import { compactNerveSummary, NerveCenter } from './components/NerveCenter.jsx';
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
 import { BugLog } from './components/BugLog.jsx';
+import { DevEditMode } from './components/DevEditMode.jsx';
 
 // ONE NerveCenter surface (7/21/26). The "Next" / "legacy" split is gone: the M3
 // surface was already the default for the nervecenter view and already carried
@@ -3990,6 +3991,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       )}
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
       {/* Context tags removed */}
+      {/* Dev edit mode — a global overlay, mounted once here so it covers every
+          surface (Nerve Center, Focus, Queue, panels and modals alike). It renders
+          nothing at all until the Settings switch turns it on. */}
+      <DevEditMode enabled={AS.features?.devEditMode === true} T={C}
+        onExit={() => setAS(p => ({ ...p, features: { ...(p.features || {}), devEditMode: false } }))} />
       {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} initialTab={settingsInitialTab} onClose={()=>setShowSet(false)} onSignOut={onSignOut} sidebarW={sidebarW}
         hasAI={hasAI} aiConfig={aiConfig}
         curEnergy={curEnergy} onSetEnergy={e=>setAS(p=>({...p,currentEnergy:e}))}

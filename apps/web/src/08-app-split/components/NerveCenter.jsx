@@ -63,7 +63,8 @@ function softBorder(color, alpha) {
 
 const MIN_COLLAPSED_TASKS = 5;
 const TIMELINE_PX_HR = 60; // 60 px/hour in the daily timeline — Google Calendar day-view density
-// Floor for any calendar scroller (live timeline and the card agenda). A `flex: 1 1 0`
+// Floor for the live-timeline scroller ONLY — never the agenda, whose content is a
+// short list and would be padded out to blank space by it. A `flex: 1 1 0`
 // box with `minHeight: 0` measures ZERO whenever its column parent has no definite
 // height — which is exactly what happens in the card grid, where the card body is
 // `flex: 0 0 auto` (headerScrolls) and the wrapper's `height: 100%` has nothing to
@@ -71,6 +72,8 @@ const TIMELINE_PX_HR = 60; // 60 px/hour in the daily timeline — Google Calend
 // Live-time view rendered as an empty box (owner: "Calendar flowing time of day mode
 // is blank"). A real floor makes the view impossible to collapse; `flex: 1 1 0` still
 // grows normally wherever the parent DOES have a height, so no good layout changes.
+// The timeline always paints a full 24h grid (1440px of content), so a floor can never
+// leave it half empty; a list-shaped scroller uses `flex: 1 1 auto` instead.
 const CAL_SCROLL_MIN_H = 260;
 
 // ── "Calm rows" prototype — ?ncproto=1 to enable, ?ncproto=0 to disable ──────
@@ -3821,7 +3824,15 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               ) : calCardView === "timeline" ? (
                 <CalendarTimeline calendarRows={ncQueues.calendarRaw} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
               ) : (
-                <div data-agenda-scroll="true" style={{ flex:1, minHeight:CAL_SCROLL_MIN_H, overflowY:"auto", overflowX:"hidden" }}>
+                /* Agenda is a list of real rows, so it must NEVER carry the timeline's
+                   fixed floor: a day with two events then painted 260px of empty box,
+                   and an expanded card read as half blank (owner ticket PV3uGXqB).
+                   `flex: 1 1 auto` is the fix for both failure modes at once — the
+                   basis is the content height, so the box can neither collapse to zero
+                   in an indefinite-height parent (the bug the floor was added for) nor
+                   inflate past its own rows; it still grows and scrolls wherever the
+                   parent DOES have a height. */
+                <div data-agenda-scroll="true" style={{ flex:"1 1 auto", minHeight:0, overflowY:"auto", overflowX:"hidden" }}>
                   {ncLists.calendarToday.length === 0 && ncLists.calendarPast.length === 0 && ncLists.calendarTomorrow.length === 0 ? emptyMsg("No events today.") : (() => {
                     const cardListStyle = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
                     const pastRows     = ncLists.calendarPast;
