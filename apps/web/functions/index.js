@@ -12,6 +12,7 @@ const phoneRelayV2  = require("./phone-relay-v2");
 const { onPhoneRelayV2PresenceWrite } = require("./phone-relay-v2/onPresenceWrite");
 const mcpHandler    = require("./mcp");
 const googleSearch  = require("./google-search");
+const passkeys      = require("./passkeys");
 
 exports.aiProxy         = onRequest({ timeoutSeconds: 300, memory: "256MiB", region: "us-central1" }, aiProxy);
 exports.appConfig       = onRequest({ timeoutSeconds: 15,  memory: "128MiB", region: "us-central1" }, appConfig);
@@ -32,3 +33,4 @@ exports.phoneRelayV2    = onRequest({ timeoutSeconds: 10,  memory: "128MiB", reg
 exports.onPhoneRelayV2PresenceWrite = onPhoneRelayV2PresenceWrite;
 exports.mcp             = onRequest({ timeoutSeconds: 60,  memory: "256MiB", region: "us-central1" }, mcpHandler);
 exports.googleSearch    = onRequest({ timeoutSeconds: 15,  memory: "128MiB", region: "us-central1" }, googleSearch);
+exports.passkeys        = onRequest({ timeoutSeconds: 15,  memory: "256MiB", region: "us-central1" }, passkeys);

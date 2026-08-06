@@ -22,6 +22,7 @@ import { App } from './08-app-split/index.jsx';
 import { DiagnosticsOverlay } from './diagnostics.jsx';
 import { ActionBtn, OutlinedButton, Checkbox } from './08-app-split/m3.jsx';
 import { NC_FONT_STACK, NC_TYPE } from './08-app-split/ui-tokens.jsx';
+import { passkeysSupported, passkeyRegisteredHere, rememberPasskeyRegistered, assertPasskey } from './passkey-client.js';
 
 const _AUTH_STAY_SIGNED_IN_KEY = "ot_auth_stay_signed_in";
 const _AUTH_LAST_UID_KEY       = "ot_last_uid";
@@ -138,6 +139,151 @@ async function _signInWithGoogle(staySignedIn = true) {
   try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid); } catch (_) {}
   _rememberGoogleEmail(u.email);
   return u;
+}
+
+// ── One signing for both gates (owner ticket MsISWD2d) ──────────────────────
+// The app asked you to sign in twice: once for the app itself (Firebase Auth's
+// Google provider) and again for Gmail and Calendar. Two consent screens for one
+// decision — and because they were independent, nothing forced them onto the
+// same Google account.
+//
+// The standard shape for this is a single OAuth 2.0 authorization-code request
+// carrying both the OpenID Connect identity scopes and the API scopes. One code
+// comes back, the server exchanges it once, and that one exchange yields both
+// the identity (turned into a Firebase session) and the durable mail/calendar
+// access (a refresh token kept server-side, never in this browser).
+//
+// This path is ADDITIVE. If anything about it is unavailable — the server half
+// isn't configured, the Google script won't load, the popup is blocked, or we're
+// in the standalone-iOS case where popups are known to hang — the original
+// Firebase Google sign-in below runs instead, unchanged. There is always a door.
+const _UNIFIED_SCOPES = [
+  'openid',
+  'email',
+  'profile',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.modify',
+].join(' ');
+
+let _gisPromise = null;
+function _loadGis() {
+  if (window.google?.accounts?.oauth2) return Promise.resolve(true);
+  if (_gisPromise) return _gisPromise;
+  _gisPromise = new Promise((resolve) => {
+    const done = () => resolve(!!window.google?.accounts?.oauth2);
+    const existing = document.querySelector('script[src*="accounts.google.com/gsi"]');
+    if (existing) {
+      const t = setInterval(() => { if (window.google?.accounts?.oauth2) { clearInterval(t); done(); } }, 150);
+      setTimeout(() => { clearInterval(t); done(); }, 8000);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.onload = done;
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  });
+  return _gisPromise;
+}
+
+async function _readServerAuthConfig() {
+  try {
+    const r = await fetch('/api/app-config');
+    const d = await r.json();
+    const integrations = d?.integrations || {};
+    const clientId = String(integrations.googleClientId || d?.googleClientId || '').trim();
+    return { clientId, available: !!integrations.googleServerAuthAvailable && !!clientId };
+  } catch (_) {
+    return { clientId: '', available: false };
+  }
+}
+
+// Returns the signed-in user, or null when this path isn't usable and the caller
+// should fall back. Throws only for a genuine failure worth showing.
+async function _signInOnceWithGoogle(staySignedIn = true) {
+  if (_isStandaloneIOS()) return null; // popups hang here; redirect flow owns this case
+  const { clientId, available } = await _readServerAuthConfig();
+  if (!available) return null;
+  if (!(await _loadGis())) return null;
+
+  const code = await new Promise((resolve, reject) => {
+    let settled = false;
+    let client;
+    try {
+      client = window.google.accounts.oauth2.initCodeClient({
+        client_id: clientId,
+        scope: _UNIFIED_SCOPES,
+        ux_mode: 'popup',
+        include_granted_scopes: true,
+        // Always show the chooser. Silently reusing whatever account the browser
+        // had active is what kept landing this app on the wrong mailbox.
+        select_account: true,
+        callback: (resp) => {
+          if (settled) return;
+          settled = true;
+          if (resp?.error) {
+            if (resp.error === 'popup_closed_by_user' || resp.error === 'access_denied') resolve('');
+            else reject(new Error(resp.error_description || resp.error));
+            return;
+          }
+          resolve(String(resp?.code || ''));
+        },
+      });
+    } catch (e) {
+      reject(e);
+      return;
+    }
+    try { client.requestCode(); } catch (e) { if (!settled) { settled = true; reject(e); } }
+  });
+  // Closing the picker is a decision, not a failure — and it must NOT fall
+  // through to the legacy flow, or dismissing one Google popup would open a
+  // second one. The sentinel says "handled, do nothing".
+  if (!code) return "cancelled";
+
+  const r = await fetch('/api/google-workspace', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XmlHttpRequest' },
+    body: JSON.stringify({ action: 'signIn', code }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.error || !d.customToken) {
+    throw new Error(d.error || `Sign-in failed (${r.status})`);
+  }
+
+  await _setAuthPersistence(staySignedIn);
+  try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? '1' : '0'); } catch (_) {}
+  const cred = await firebase.auth().signInWithCustomToken(d.customToken);
+  const u = cred.user;
+  // Tell the app that mail/calendar are already connected, so it loads them on
+  // this very first render instead of showing a "connect Google" prompt for a
+  // grant that was part of the same consent.
+  try {
+    if (d.workspaceConnected) localStorage.setItem('ot_google_connected', '1');
+  } catch (_) {}
+  const emailPrefix = String(d.account || u.email || '').split('@')[0].toLowerCase();
+  if (emailPrefix && (!u.displayName || u.displayName !== emailPrefix)) {
+    try { await u.updateProfile({ displayName: emailPrefix }); } catch (_) {}
+  }
+  try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid); } catch (_) {}
+  _rememberGoogleEmail(d.account || u.email);
+  return u;
+}
+
+// Sign in with the device biometric. Returns the user, or null if the person
+// dismissed the prompt (not an error — they can still use the Google button).
+async function _signInWithPasskey(staySignedIn = true) {
+  const d = await assertPasskey();
+  if (!d) return null;
+  await _setAuthPersistence(staySignedIn);
+  try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? "1" : "0"); } catch (_) {}
+  const cred = await firebase.auth().signInWithCustomToken(d.customToken);
+  rememberPasskeyRegistered(true);
+  if (d.email) _rememberGoogleEmail(d.email);
+  try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, cred.user.uid); } catch (_) {}
+  return cred.user;
 }
 
 // Map a Firebase auth error code to a human, actionable message. Returns "" for the
@@ -329,6 +475,25 @@ function LoginScreen({ onLogin, initialError = "" }) {
   const [err, setErr]           = React.useState(initialError);
   const [loading, setLoading]   = React.useState(false);
   const [staySignedIn, setStaySignedIn] = React.useState(_readStaySignedIn);
+  // Only offered when this browser has actually registered a passkey — an unlock
+  // button that opens a prompt with nothing behind it is worse than no button.
+  const [bioReady, setBioReady] = React.useState(() => passkeysSupported() && passkeyRegisteredHere());
+  const [bioBusy, setBioBusy]   = React.useState(false);
+
+  async function handleBiometricSignIn() {
+    setBioBusy(true); setErr("");
+    try {
+      const u = await _signInWithPasskey(staySignedIn);
+      if (u) onLogin(u);
+    } catch (e) {
+      // A passkey that no longer verifies must never become a dead end: say so
+      // plainly and leave the Google button as the way through.
+      setErr(`${e?.message || "Biometric sign-in failed."} You can still continue with Google.`);
+      setBioReady(false);
+    } finally {
+      setBioBusy(false);
+    }
+  }
 
   const S = {
     bg:"#EDE5D8", card:"#F5EFE5", text:"#3D3633",
@@ -338,7 +503,17 @@ function LoginScreen({ onLogin, initialError = "" }) {
   async function handleGoogleSignIn() {
     setLoading(true); setErr("");
     try {
-      const u = await _signInWithGoogle(staySignedIn);
+      // One consent covering the app AND mail/calendar. Returns null when this
+      // path isn't usable here, in which case the original two-step flow runs.
+      let u = null;
+      try {
+        u = await _signInOnceWithGoogle(staySignedIn);
+        if (u === "cancelled") return;
+        if (u) { onLogin(u); return; }
+      } catch (e) {
+        console.warn('[Auth] unified sign-in failed, falling back:', e?.message || e);
+      }
+      u = await _signInWithGoogle(staySignedIn);
       if (u) onLogin(u); // popup path; redirect path reloads the page
     } catch (e) {
       const msg = _googleErrorMessage(e);
@@ -370,6 +545,24 @@ function LoginScreen({ onLogin, initialError = "" }) {
 
         {err && (
           <p style={{ fontSize:NC_TYPE.meta, color:"#C94040", marginBottom:14, lineHeight:1.5, fontFamily:NC_FONT_STACK }}>{err}</p>
+        )}
+
+        {bioReady && (
+          <div style={{ marginBottom:14 }}>
+            <ActionBtn
+              variant="filled"
+              icon="fingerprint"
+              onClick={handleBiometricSignIn}
+              disabled={bioBusy || loading}
+              containerColor={S.text}
+              labelColor={S.card}
+              height={46}
+              style={{ width:"100%", opacity: bioBusy ? 0.6 : 1 }}
+            >
+              {bioBusy ? "Waiting for your device…" : "Unlock with Face ID or fingerprint"}
+            </ActionBtn>
+            <div style={{ textAlign:"center", fontSize:NC_TYPE.small, color:S.tFaint, margin:"10px 0 2px", fontFamily:NC_FONT_STACK }}>or</div>
+          </div>
         )}
 
         {/* Google Sign-In */}

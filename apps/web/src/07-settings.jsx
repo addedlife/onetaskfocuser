@@ -8,6 +8,74 @@ import { ActionBtn, IconBtn, Switch, TextField, Slider } from './08-app-split/m3
 import RelayDevicesPanel from './08-app-split/components/RelayDevicesPanel.jsx';
 import { ProcessLogPanel } from './08-app-split/components/ProcessLog.jsx';
 import { detectSurfaceId, surfaceLabel } from './08-app-split/process-log.js';
+import { biometricAvailable, listPasskeys, registerPasskeyForCurrentUser, removePasskey } from './passkey-client.js';
+
+// ── Biometric unlock ────────────────────────────────────────────────────────
+// Turning this on stores a passkey: the device keeps a private key its sensor
+// unlocks, the server keeps only the public half. Nothing about the fingerprint
+// or face itself is sent anywhere, which is worth saying on screen rather than
+// leaving people to wonder.
+function BiometricPanel({ T, type }) {
+  const [available, setAvailable] = useState(null);
+  const [keys, setKeys] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    biometricAvailable().then(ok => { if (alive) setAvailable(ok); });
+    listPasskeys()
+      .then(d => { if (alive) setKeys(d.passkeys || []); })
+      .catch(() => { if (alive) setKeys([]); });
+    return () => { alive = false; };
+  }, []);
+
+  async function addPasskey() {
+    setBusy(true); setErr("");
+    try {
+      await registerPasskeyForCurrentUser(navigator.platform || "This device");
+      setKeys((await listPasskeys()).passkeys || []);
+    } catch (e) {
+      if (e?.name !== "NotAllowedError" && e?.name !== "AbortError") setErr(e?.message || "Could not set up biometric unlock.");
+    } finally { setBusy(false); }
+  }
+
+  async function drop(id) {
+    setBusy(true); setErr("");
+    try { setKeys((await removePasskey(id)).passkeys || []); }
+    catch (e) { setErr(e?.message || "Could not remove that passkey."); }
+    finally { setBusy(false); }
+  }
+
+  if (available === false && !keys.length) return null;
+
+  return (
+    <div style={{marginTop:24,paddingTop:20,borderTop:`1px solid ${T.brdS || T.brd}`}}>
+      <div style={{fontSize:type.control,fontWeight:`var(--nc-fw-semibold, 600)`,color:T.text,fontFamily:NC_FONT_STACK,marginBottom:6}}>
+        Face ID / fingerprint unlock
+      </div>
+      <p style={{fontSize:type.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 12px",lineHeight:type.line}}>
+        Sign in with your face or fingerprint instead of going through Google every time.
+        Your fingerprint never leaves this device — the app only ever sees a yes from it.
+      </p>
+      {keys.map(k => (
+        <div key={k.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <span style={{flex:1,minWidth:0,fontSize:type.help,color:T.tSoft,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {k.label}{k.lastUsedAt ? " — used recently" : ""}
+          </span>
+          <ActionBtn variant="text" labelColor={T.tSoft} height={36} labelSize={type.help}
+            onClick={() => drop(k.id)} disabled={busy}>Remove</ActionBtn>
+        </div>
+      ))}
+      <ActionBtn variant="outlined" outlineColor={T.brd} labelColor={T.text} height={44} labelSize={type.control}
+        icon="fingerprint" onClick={addPasskey} disabled={busy || available === false}
+        style={{width:"100%",'--md-outlined-button-label-text-weight':'600'}}>
+        {busy ? "Waiting for your device…" : keys.length ? "Add another device" : "Turn on biometric unlock"}
+      </ActionBtn>
+      {err && <p style={{fontSize:type.help,color:T.danger || T.tSoft,fontFamily:NC_FONT_STACK,margin:"8px 0 0",lineHeight:type.line}}>{err}</p>}
+    </div>
+  );
+}
 
 
 function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
@@ -501,6 +569,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 </ActionBtn>
               </>
             )}
+
+            <BiometricPanel T={T} type={settingsType} />
 
             {/* Phone hosts — approve/revoke the PCs and tablets that hold the
                 phone's Bluetooth link. Replaces the old shared relay secret. */}

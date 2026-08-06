@@ -20,6 +20,7 @@
     "@material/material-color-utilities": "^0.4.0",
     "@material/web": "^2.4.1",
     "@netlify/blobs": "^9.1.2",
+    "@simplewebauthn/browser": "^13.3.0",
     "firebase": "^10.8.1",
     "firebase-admin": "^13.9.0",
     "react": "^18.3.1",

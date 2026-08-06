@@ -128,5 +128,19 @@ service cloud.firestore {
     match /serverOnlyGmailWatches/{email} {
       allow read, write: if false;
     }
+    // Passkey material (passkeys.js). Public keys are not secrets, but the
+    // credential index maps a credential to an account, and a writable challenge
+    // store would let anyone pre-plant the value their own signature answers —
+    // which is the whole security of the scheme. The Admin SDK bypasses rules,
+    // so closing all three costs the passkey flow nothing.
+    match /serverOnlyPasskeys/{firebaseUid}/{document=**} {
+      allow read, write: if false;
+    }
+    match /serverOnlyPasskeyIndex/{credentialId} {
+      allow read, write: if false;
+    }
+    match /serverOnlyPasskeyChallenges/{handle} {
+      allow read, write: if false;
+    }
   }
 }

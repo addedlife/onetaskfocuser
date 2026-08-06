@@ -145,6 +145,147 @@ async function exchangeCode(req, user, body) {
   return { connected: true, account: email, accounts: await connectedEmails(user) };
 }
 
+// ── One signing, both gates (owner ticket MsISWD2d) ─────────────────────────
+// The app used to authenticate TWICE: Firebase Auth's Google provider for the
+// app session, then a second, separate Google authorization for Gmail/Calendar.
+// Two consent screens for one human decision, and — because they were separate
+// — nothing made them land on the same Google account, which is how the second
+// mailbox kept ending up unconnected.
+//
+// The industry-standard shape is a single OAuth 2.0 authorization-code request
+// carrying BOTH sets of scopes: OpenID Connect identity scopes (openid, email,
+// profile) and the API scopes. One code comes back and is exchanged once, and
+// that one exchange yields both halves — an `id_token` (who this is) and a
+// `refresh_token` (durable API access, held server-side, never in the browser).
+// The id_token is turned into a Firebase custom token so the app session is a
+// normal Firebase session with all its usual persistence and auto-refresh; the
+// refresh token is stored exactly where the existing connect flow stores it, so
+// everything downstream of here is unchanged.
+//
+// Additional mailboxes stay INCREMENTAL AUTHORIZATION — Google's own recommended
+// pattern — and go through `exchange` as before: an extra grant on an existing
+// session, not a second login.
+function decodeIdTokenClaims(idToken) {
+  try {
+    const payload = String(idToken || "").split(".")[1];
+    if (!payload) return null;
+    return JSON.parse(Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+// The id_token's signature is deliberately NOT re-verified here, and that is the
+// documented rule rather than a shortcut: this token did not arrive from the
+// browser, it came back to this server over TLS from Google's token endpoint in
+// direct response to a request authenticated with our client secret. Google's
+// own guidance is that tokens received that way can be trusted without
+// re-validation. The claims below are still checked, because a token that is
+// authentic but meant for a DIFFERENT client would otherwise be accepted.
+function assertIdTokenUsable(claims, clientId) {
+  if (!claims) throw httpError(401, "Google did not return an identity token.");
+  const aud = String(claims.aud || "");
+  if (aud !== String(clientId)) throw httpError(401, "Google identity token was issued for a different app.");
+  const iss = String(claims.iss || "");
+  if (iss !== "accounts.google.com" && iss !== "https://accounts.google.com") {
+    throw httpError(401, "Google identity token has an unexpected issuer.");
+  }
+  if (Number(claims.exp || 0) * 1000 < Date.now()) throw httpError(401, "Google identity token has already expired.");
+  const email = String(claims.email || "").toLowerCase().trim();
+  if (!email) throw httpError(401, "Google identity token carries no email address.");
+  // The Firestore rules gate on email_verified, so an unverified Google account
+  // must not be able to mint a session that would then be denied at every read.
+  if (claims.email_verified !== true && claims.email_verified !== "true") {
+    throw httpError(403, "This Google account's email address is not verified.");
+  }
+  return email;
+}
+
+// Find the existing Firebase user for this Google account, or create one. Looking
+// up by email first is what keeps a returning owner on their ORIGINAL uid — all
+// their data hangs off it, so minting a new one would silently present an empty
+// app.
+async function firebaseUserForGoogleAccount(email, claims) {
+  const auth = getAdminAuth();
+  const displayName = email.split("@")[0].toLowerCase();
+  try {
+    const existing = await auth.getUserByEmail(email);
+    if (!existing.emailVerified) {
+      await auth.updateUser(existing.uid, { emailVerified: true });
+    }
+    return existing;
+  } catch (e) {
+    if (e?.code !== "auth/user-not-found") throw e;
+  }
+  return auth.createUser({
+    email,
+    emailVerified: true,
+    displayName,
+    ...(claims?.picture ? { photoURL: String(claims.picture) } : {}),
+  });
+}
+
+async function signInWithGoogleCode(req, body) {
+  if ((req.headers["x-requested-with"]) !== "XmlHttpRequest") {
+    throw httpError(400, "Missing Google authorization request header.");
+  }
+  const { clientId, available } = config();
+  if (!available) throw httpError(503, "Google Workspace server auth is not configured.");
+  const code = String(body.code || "").trim();
+  if (!code) throw httpError(400, "Missing Google authorization code.");
+  const origin = allowedOrigin(req.headers.origin || "");
+  const tokens = await postTokenForm({
+    code,
+    client_id: clientId,
+    client_secret: googleWorkspaceClientSecret(),
+    redirect_uri: origin,
+    grant_type: "authorization_code",
+  });
+  const claims = decodeIdTokenClaims(tokens.id_token);
+  const email = assertIdTokenUsable(claims, clientId);
+  const record = await firebaseUserForGoogleAccount(email, claims);
+  const user = { uid: email.split("@")[0].toLowerCase(), firebaseUid: record.uid, email };
+
+  // Store the mail/calendar half of the same grant. A refresh token is only
+  // issued on the FIRST consent for a given client+account, so a returning user
+  // re-signing in gets none — keeping the stored one is what makes this
+  // repeatable rather than a one-shot that breaks the second time.
+  const db = getAdminDb();
+  const ref = accountRef(db, user.uid, email);
+  const previous = await ref.get();
+  const refreshToken = tokens.refresh_token || (previous.exists ? previous.data()?.refreshToken : "");
+  let workspaceConnected = false;
+  if (refreshToken) {
+    const existingCol = await accountsCol(db, user.uid).get();
+    const isPrimary = (previous.exists ? !!previous.data()?.primary : false) || existingCol.empty;
+    await ref.set({
+      googleEmail: email,
+      primary: isPrimary,
+      refreshToken,
+      accessToken: tokens.access_token || "",
+      expiresAt: Date.now() + Math.max(60, Number(tokens.expires_in || 3600) - 60) * 1000,
+      scope: tokens.scope || `${CALENDAR_SCOPE} ${GMAIL_SCOPE} ${GMAIL_SEND_SCOPE} ${GMAIL_MODIFY_SCOPE}`,
+      tokenType: tokens.token_type || "Bearer",
+      appUid: user.uid,
+      firebaseUid: user.firebaseUid,
+      appEmail: email,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    workspaceConnected = true;
+  }
+
+  const customToken = await getAdminAuth().createCustomToken(record.uid);
+  return {
+    customToken,
+    account: email,
+    // False here is not a failure: it means Google withheld a refresh token
+    // because this account had already consented and none was stored. The client
+    // shows the ordinary "connect mail" path rather than pretending mail works.
+    workspaceConnected,
+    accounts: workspaceConnected ? await connectedEmails(user) : [],
+  };
+}
+
 // Returns [{ email, ... }] for every connected Google account, migrating the
 // legacy single-token doc into an account entry the first time it's seen.
 function sortPrimaryFirst(accounts) {
@@ -610,6 +751,10 @@ const handler = async (req, res) => {
   try {
     const body = req.body || {};
     const action = String(body.action || "status");
+    // The ONE action that runs without a session, because it is what creates the
+    // session. It authenticates itself: an authorization code is single-use and
+    // only Google can mint one for our client id.
+    if (action === "signIn") return res.status(200).set(headers).json(await signInWithGoogleCode(req, body));
     const user = await authedUser(req);
     if (action === "status")              return res.status(200).set(headers).json(await statusAction(user));
     if (action === "listAccounts")        return res.status(200).set(headers).json(await listAccountsAction(user));

@@ -34,6 +34,7 @@
       { "source": "/api/phone-relay-v2",    "function": "phoneRelayV2",    "region": "us-central1" },
       { "source": "/api/mcp",              "function": "mcp",             "region": "us-central1" },
       { "source": "/api/google-search",     "function": "googleSearch",    "region": "us-central1" },
+      { "source": "/api/passkeys",          "function": "passkeys",        "region": "us-central1" },
       { "source": "/mcp",                  "function": "mcp",             "region": "us-central1" },
       { "source": "/health-callback",      "destination": "/index.html" },
       { "source": "/**",                   "destination": "/index.html" }
