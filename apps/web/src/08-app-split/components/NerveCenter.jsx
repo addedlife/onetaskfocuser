@@ -7,6 +7,7 @@ import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthPage } from './HealthPage.jsx';
 import { shouldRunForContentAndClaim, publishContentResult } from '../ai-call-throttle.js';
 import { gmailDeepLink, gmailInboxLink, gmailReplyLink } from '../utils/gmail-links.js';
+import { useSearchReveal } from '../utils/search-hooks.js';
 
 // Owner ticket 7/15: the 5-min gate on dashboard.snapshot.v1 lived only in an
 // in-memory ref, which reset to 0 (an immediate, uncapped call) every time this
@@ -1306,6 +1307,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // densityPref below); width still comes from `availableW` further down, which
   // subtracts the nav rail.
   const sizeClass = useWindowSizeClass();
+  // Universal search: a mail or calendar result lands on its row here and
+  // flashes it (rows carry data-search-id).
+  useSearchReveal("nervecenter");
   const [healthCardVisible, setHealthCardVisible] = useState(() => {
     try { return localStorage.getItem("nc_health_card_visible") !== "0"; } catch { return true; }
   });
@@ -3672,7 +3676,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 handleEmailSelect(msg);
               };
               return (
-                <ListItem key={msg.id||i} type="button" onClick={openReader} style={{ borderRadius: RADIUS.sm, ...rowVars }}>
+                <ListItem key={msg.id||i} data-search-id={msg.id} type="button" onClick={openReader} style={{ borderRadius: RADIUS.sm, ...rowVars }}>
                   {/* Uniform leading: same 7px dot metric as every other card's rows. */}
                   {<span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: mailIsUnread(msg) ? CAT_MAIL : "transparent", flexShrink: 0 }} />}
                   {/* Body summary is the read target (full headline size); sender rides the
@@ -3903,8 +3907,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       // events recede instead of being hidden.
                       const rowOpacity = row.past ? 0.65 : (rating === 3 ? 0.5 : 1);
                       return row.evt?.htmlLink
-                        ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius:RADIUS.sm, opacity:rowOpacity }}>{item}</ListItem>
-                        : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius:RADIUS.sm, opacity:rowOpacity }}>{item}</ListItem>;
+                        ? <ListItem key={row.evt?.id||row.index} data-search-id={row.evt?.id} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius:RADIUS.sm, opacity:rowOpacity }}>{item}</ListItem>
+                        : <ListItem key={row.evt?.id||row.index} data-search-id={row.evt?.id} type="text" style={{ borderRadius:RADIUS.sm, opacity:rowOpacity }}>{item}</ListItem>;
                     };
                     return (
                       <>
@@ -4121,8 +4125,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   </>
                 );
                 return row.evt?.htmlLink
-                  ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>
-                  : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>;
+                  ? <ListItem key={row.evt?.id||row.index} data-search-id={row.evt?.id} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>
+                  : <ListItem key={row.evt?.id||row.index} data-search-id={row.evt?.id} type="text" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>;
               })}
               {showAddEvent && (
                 <div style={{ padding:"10px 12px",borderTop:`1px solid ${C.divider}` }}>
@@ -4177,7 +4181,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   handleEmailSelect(msg);
                 };
                 return (
-                  <ListItem key={msg.id||i} type="button" onClick={openReader} style={{ borderRadius: RADIUS.sm, ...rowVars }}>
+                  <ListItem key={msg.id||i} data-search-id={msg.id} type="button" onClick={openReader} style={{ borderRadius: RADIUS.sm, ...rowVars }}>
                     {<span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: mailIsUnread(msg) ? CAT_MAIL : "transparent", flexShrink: 0 }} />}
                     {/* Body summary headlines; sender rides the smaller supporting line. */}
                     <span slot="headline" style={{ color:C.text, fontWeight:`var(--nc-fw-normal, 450)`, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", whiteSpace:"normal", wordBreak:"break-word" }}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
@@ -4643,8 +4647,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                             // Calm-rows: routine events (davening etc.) whisper so specials stand out.
                             const rowOpacity = row.past ? 0.7 : (row.routine && !row.now ? 0.55 : 1);
                             return row.evt?.htmlLink
-                              ? <ListItem key={row.evt?.id || row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.xs, opacity: rowOpacity }}>{content}</ListItem>
-                              : <ListItem key={row.evt?.id || row.index} type="text" style={{ borderRadius: RADIUS.xs, opacity: rowOpacity }}>{content}</ListItem>;
+                              ? <ListItem key={row.evt?.id || row.index} data-search-id={row.evt?.id} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.xs, opacity: rowOpacity }}>{content}</ListItem>
+                              : <ListItem key={row.evt?.id || row.index} data-search-id={row.evt?.id} type="text" style={{ borderRadius: RADIUS.xs, opacity: rowOpacity }}>{content}</ListItem>;
                           };
                           const NowBar = (
                             <div ref={agendaNowBarRef} style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "4px 0", margin: "0 2px" }}>

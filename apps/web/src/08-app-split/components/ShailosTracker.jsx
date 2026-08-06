@@ -16,6 +16,7 @@ import {
   performResearch, transcribeAndParse, transcribeAudio,
 } from '../shailos-ai.js';
 import { publishContentResult, releaseContentClaim, shouldRunForContentAndClaim } from '../ai-call-throttle.js';
+import { useSearchReveal } from '../utils/search-hooks.js';
 
 // Stable short fingerprint of an answer, used as the content key for the AI claim
 // (see the save handler). Same text ⇒ same key on every device, so the summary for a
@@ -181,6 +182,8 @@ function ResearchReport({ text, C }) {
 // ── The tracker ──────────────────────────────────────────────────────────────
 export function ShailosTracker({ T, user = null, action = null, onRecordCall = null }) {
   const C = cleanTheme(T);
+  // Universal search: a shaila result scrolls to its card here and flashes it.
+  useSearchReveal("shailos");
   const viewportW = useViewportWidth();
   const wide = viewportW > 980;
 
@@ -1013,7 +1016,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
               ) : filteredShailos.map((shaila) => {
                 const active = selectedShaila?.id === shaila.id;
                 return (
-                  <div key={shaila.id} onClick={() => setSelectedShaila(shaila)}
+                  <div key={shaila.id} data-search-id={shaila.id} onClick={() => setSelectedShaila(shaila)}
                     style={{
                       padding: '8px 10px', borderRadius: RADIUS.sm, cursor: 'pointer',
                       border: `1px solid ${active ? tint(C.accent, '55') : C.divider}`,

@@ -10,6 +10,9 @@ import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMes
 // The two real M3 controls this surface uses (call-log search). Everything else
 // here predates the GM3 rule and is raw markup on purpose — a native-parity clone.
 import { TextField as DpTextField, IconButton as DpIconButton } from './08-app-split/m3.jsx';
+import { useSearchSource } from './08-app-split/utils/search-hooks.js';
+import { messageRecords, MESSAGE_ANCHOR_SEP } from './08-app-split/utils/search-index.js';
+import { subscribeSearchReveal, clearSearchReveal, SEARCH_FLASH_CLASS, SEARCH_FLASH_MS } from './08-app-split/utils/search-registry.js';
 import { subscribeOwner, rememberHandshake, lastHandshakeMs } from './08-app-split/phone-host-control.js';
 import { commandChannelHealth } from './08-app-split/utils/relay-health.js';
 import { createAckTracker } from './08-app-split/utils/ack-wait.js';
@@ -2340,6 +2343,43 @@ function MessagesSlice({
       });
     }
   }, [selectedThreadMessages]);
+
+  // ── Universal search ──────────────────────────────────────────────────────
+  // Publish every message so the rail's search can find it, and handle our own
+  // reveal: a message result has to OPEN its thread before the row exists, and
+  // the thread is virtualised, so the generic scroll-to-node hook cannot do it.
+  useSearchSource("messages", useMemo(() => messageRecords(conversations), [conversations]));
+
+  // { id, nonce } — the nonce makes picking the SAME result twice re-reveal it.
+  const [messageReveal, setMessageReveal] = useState(null);
+  useEffect(() => subscribeSearchReveal((target) => {
+    if (target.surface !== "deskphone") return;
+    const [conversationKey, messageId] = String(target.anchorId).split(MESSAGE_ANCHOR_SEP);
+    if (!messageId) return;
+    clearSearchReveal();
+    if (conversationKey) setSelectedConversationKey(conversationKey);
+    setMessageReveal({ id: messageId, nonce: target.at || Date.now() });
+  }), [setSelectedConversationKey]);
+
+  // Runs once the (possibly just-switched) thread has rendered. Retries a beat
+  // later because the thread list is virtualised and may still be filling in.
+  useEffect(() => {
+    if (!messageReveal?.id) return undefined;
+    const timers = [];
+    let attempts = 0;
+    const run = () => {
+      scrollToMessage(messageReveal.id);
+      const node = messageScrollRef.current?.querySelector?.(`[data-message-id="${CSS.escape(messageReveal.id)}"]`);
+      if (!node) {
+        if (attempts++ < 8) timers.push(setTimeout(run, 150));
+        return;
+      }
+      node.classList.add(SEARCH_FLASH_CLASS);
+      timers.push(setTimeout(() => node.classList.remove(SEARCH_FLASH_CLASS), SEARCH_FLASH_MS));
+    };
+    run();
+    return () => timers.forEach(clearTimeout);
+  }, [messageReveal, selectedThreadMessages, scrollToMessage]);
 
   const revealMessageActions = useCallback((messageId) => {
     setOpenActionMessageId((current) => current === messageId ? "" : messageId);

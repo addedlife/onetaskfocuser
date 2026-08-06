@@ -8,6 +8,7 @@ import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_W
 import { preferredHostId, HANDOFF_GRACE_MS } from '../phone-link.js';
 import { subscribeAiLaneStatus, subscribeAiLog } from '../ai-lane-status.js';
 import { isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
+import { UniversalSearch } from './UniversalSearch.jsx';
 
 // Real M3 web components — the shared wrappers from m3.jsx (single home, no
 // per-file re-wrapping). md-navigation-rail is not yet in @material/web v2.4;
@@ -27,6 +28,20 @@ const BUGLOG_COUNT_EVENT = 'shamash-buglog:count';
 
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {}, onEnsurePcHost, onOpenFocusSuggest, aiLaneCatalog = null, penFailedCount = 0, onRetryPen, onOpenPen, onDismissPenAlert }) {
   const [bugLogCount, setBugLogCount] = React.useState(0);
+  // Universal search (owner ticket P23NUsiioNTQ1gvfcsZ9). Ctrl/Cmd+K is the
+  // shortcut every desktop app trained the owner on, so it is bound globally —
+  // but never while a text box has focus, where it may mean something local.
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'k' && e.key !== 'K') return;
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      setSearchOpen(v => !v);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   // The failed-transcription bubble's own menu (retry / open / dismiss).
   const [penMenuOpen, setPenMenuOpen] = React.useState(false);
   React.useEffect(() => {
@@ -493,6 +508,29 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
           </>
         )}
       </div>
+
+      {/* Universal search — sits above the destinations because it reaches all
+          of them. M3 puts a search affordance at the head of the rail. */}
+      <ActionBtn
+        variant="text"
+        icon="search"
+        iconSize={ic(24)}
+        height={BTN_H}
+        labelSize={FZ}
+        labelColor={C.muted}
+        onClick={() => setSearchOpen(true)}
+        title="Search everything (Ctrl+K)"
+        aria-label="Search everything"
+        style={{
+          width: "100%", flexShrink: 0, marginBottom: px(4),
+          '--md-text-button-container-shape': RADIUS.pill,
+          '--md-text-button-leading-space': displayOpen ? '12px' : '0px',
+          '--md-text-button-trailing-space': displayOpen ? '12px' : '0px',
+          '--md-text-button-icon-label-space': displayOpen ? '12px' : '0px',
+        }}
+      >
+        {displayOpen ? "Search" : null}
+      </ActionBtn>
 
       {/* NerveCenter — hub */}
       <button onClick={() => onSelect("nervecenter")} title="NerveCenter" aria-label="NerveCenter"
@@ -1101,6 +1139,15 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
 
       </div>{/* ── end utility cluster ── */}
     </div>
+
+    {/* Universal search card. Mounted from the chrome rather than App.jsx
+        because the chrome already owns surface switching (onSelect). */}
+    <UniversalSearch
+      open={searchOpen}
+      onClose={() => setSearchOpen(false)}
+      onSelectSurface={onSelect}
+      T={T}
+    />
 
     </>
   );

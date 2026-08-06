@@ -19,6 +19,7 @@ import { ConvCapture } from './components/ConvCapture.jsx';
 import { BugLog } from './components/BugLog.jsx';
 import { DevEditMode } from './components/DevEditMode.jsx';
 import { UpdatePrompt } from './components/UpdatePrompt.jsx';
+import { SearchSourcePublisher } from './components/UniversalSearch.jsx';
 
 // ONE NerveCenter surface (7/21/26). The "Next" / "legacy" split is gone: the M3
 // surface was already the default for the nervecenter view and already carried
@@ -3368,6 +3369,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const allSwitchboardTasks = AS ? AS.lists.flatMap(l => l.tasks || []) : tasks;
   const switchboardShailaList = buildNerveShailaRows(allSwitchboardTasks, pris, shailosSnapshot);
   const shailaOpenCount = switchboardShailaList.length;
+
   // The NerveCenter Shailos card no longer renders a "Recently resolved" block at
   // all (owner tickets PWbASPpx / XPrGq77h / EczjwFRB / V37NEU7I, 7/21–7/22), so the
   // completed-shaila list it fed — and the text dedupe that never fully stopped the
@@ -4268,6 +4270,17 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           the offer to update must not depend on the rail being on screen. */}
       <UpdatePrompt T={T} />
 
+      {/* Universal search (owner ticket P23NUsiioNTQ1gvfcsZ9): publishes the
+          collections this file already holds. Renders nothing. */}
+      <SearchSourcePublisher
+        tasks={switchboardTaskList}
+        priorities={pris}
+        shailos={switchboardShailaList}
+        gmailMessages={gmailMessages}
+        calendarEvents={calendarEvents}
+        onRevealTask={()=>{openCommandView("focus"); switchTab("queue");}}
+      />
+
       {!shellHidden && (
         <AppSuiteChrome
           T={T}
@@ -4942,7 +4955,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       const rowAccent = hasPastelRow ? textOnPastel(AS.colorScheme, priText(tp.color), rowBg) : tp.color;
                       const rowActionOpacity = isF ? .82 : .35;
                       return (
-                        <div key={task.id} draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)} style={{...queueRowBase,borderBottom:`1px solid ${C.divider}`,borderLeft:`3px solid ${tp.color}`,background:rowBg,cursor:"grab",opacity:task.blocked ? .82 : 1}}>
+                        <div key={task.id} data-search-id={task.id} draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)} style={{...queueRowBase,borderBottom:`1px solid ${C.divider}`,borderLeft:`3px solid ${tp.color}`,background:rowBg,cursor:"grab",opacity:task.blocked ? .82 : 1}}>
                           <span style={{cursor:"grab",padding:"2px",opacity:isF ? .75 : .35,flexShrink:0}}><IC.Grab s={12} c={_qSoft}/></span>
                           <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,color:isF?textOnColor(tp.color):C.faint,fontWeight:`var(--nc-fw-semibold, 600)`,fontFamily:NC_FONT_STACK,flexShrink:0}}>{dispPos}</span>
                           {editId === task.id ? (
