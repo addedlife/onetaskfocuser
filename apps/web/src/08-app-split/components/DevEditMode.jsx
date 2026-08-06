@@ -1,44 +1,49 @@
 // ─── Dev edit mode ────────────────────────────────────────────────────────────
 //
 // WHAT THIS IS (plain English): a switch in Settings that puts the whole app into
-// "tell me what's wrong with this" mode. Every button and every text box gets a
-// faint outline, a small blue pencil in its top-left corner ("change this") and a
-// small red garbage can in its top-right ("this shouldn't be here"). The app keeps
-// working normally the whole time; the marks float on a layer above it. Whatever
-// the owner types goes straight into the Bug Log as a ticket, with the button's
-// name, the screen it was on and the app version already filled in, so it can be
-// found again later without anybody having to remember the context.
+// "tell me what's wrong with this" mode. Every button, field and control on screen
+// gets a faint box drawn around it, so you can see exactly what the app thinks its
+// pieces are. Nothing else changes and the app keeps working normally. Press and
+// hold a box — or right-click it on a PC — and two icons appear on that one box: a
+// blue pencil ("change this") and a red garbage can ("this shouldn't be here").
+// Either one opens a note, and what you write goes straight into the Bug Log as a
+// ticket with the control's name, the screen and the app version already filled in.
 //
-// HOW IT WORKS: one fixed overlay layer (`pointer-events: none`) sits above the
-// app and paints a frame over the rectangle of every interactive element found by
+// WHY IT WORKS THIS WAY (owner, 8/6): icons on every control at once made the
+// screen "one massive clutter". Boxes are quiet; the icons are summoned for the one
+// thing you are actually pointing at, and they are the only web components this
+// overlay creates — one pair, not several hundred.
+//
+// HOW IT WORKS: one fixed overlay layer (`pointer-events: none`) sits above the app
+// and draws a box over the rectangle of every interactive element found by
 // `document.querySelectorAll`. Nothing about the app's own markup changes — no
 // component had to be touched to take part, which is the only way "every single
-// button or input field" is achievable across a 5,000-line surface. Rectangles are
-// re-measured on scroll, resize, DOM mutation and on a slow timer, all funnelled
-// through one rAF.
+// button or input field" is achievable across a 5,000-line surface, on any layout.
+// Because the layer never takes the pointer, the long-press and right-click land on
+// the app itself; the overlay listens for them on the document and maps the point
+// back to a control with elementFromPoint.
 //
-// THREE RULES LEARNED THE HARD WAY (owner, 8/6 — "one massive clutter of red and
-// blue circles", and the app froze on submit):
+// FOUR RULES LEARNED THE HARD WAY:
 //
-//   1. No filled circles. Bare glyphs — a blue pencil and a red garbage can —
-//      because 200 filled badges on one screen read as confetti, not as controls.
-//   2. A control that is scrolled out of its own list must lose its marks too. The
+//   1. A control that is scrolled out of its own list must lose its box too. The
 //      viewport is not the only clipper: a card body with its own scrollbar hides
-//      rows that are still inside the window, and marks for those rows used to
+//      rows that are still inside the window, and boxes for those rows used to
 //      float over the card's header. `clipRectFor` intersects every scrollable
-//      ancestor, so a mark appears exactly when the row it belongs to is showing.
-//   3. Never let this overlay observe itself. The MutationObserver watches
+//      ancestor, so a box appears exactly when the row it belongs to is showing.
+//   2. Never let this overlay observe itself. The MutationObserver watches
 //      document.body, and this overlay lives IN document.body — so every repaint
-//      of the marks fed the observer, which rescanned, which repainted. That loop
-//      ran at frame rate and is what locked the page up when the dialog opened.
-//      Mutations inside `[data-dev-edit-ui]` are now ignored, an unchanged
-//      measurement no longer sets state at all, and scanning stops entirely while
-//      the dialog is open.
-//   4. React keys must not contain coordinates. They did, so a single scroll
-//      changed every key and React destroyed and rebuilt every <md-icon-button> on
-//      screen — hundreds of shadow roots per frame. Keys now come from a WeakMap
-//      keyed on the element itself, a moved control only gets a style update, and
-//      measurements are throttled to MIN_RESCAN_GAP_MS apart.
+//      fed the observer, which rescanned, which repainted, at frame rate.
+//      Mutations inside `[data-dev-edit-ui]` are ignored, an unchanged measurement
+//      does not set state, and scanning stops while the dialog is open.
+//   3. React keys must not contain coordinates. They did, so one scroll changed
+//      every key and React rebuilt every element on the layer. Keys come from a
+//      WeakMap on the element itself.
+//   4. Nothing here may block the page. Measurements are throttled, and the overlay
+//      times itself: over budget and it measures less often, then marks fewer
+//      controls. It can get sluggish; it cannot freeze.
+//
+// The harness in src/dev/edit-mode-harness.jsx exercises all of it in a real
+// browser — jsdom has no layout, and the app itself is behind Google sign-in.
 
 import React from 'react';
 import { createPortal } from 'react-dom';
@@ -92,7 +97,7 @@ function idFor(el) {
 const MIN_TARGET_PX = 12;
 // Hard ceiling so a pathological screen cannot paint thousands of marks, and a
 // floor it degrades to rather than stalling (see the budget below).
-const MAX_TARGETS = 250;
+const MAX_TARGETS = 400;
 const MIN_TARGETS = 60;
 // How long one measurement is allowed to take before this overlay decides it is
 // too expensive for the page it landed on. A freeze is never an acceptable outcome
@@ -113,6 +118,11 @@ const MIN_RESCAN_GAP_MS = 180;
 const MARK_ICON_CSS = '15px';
 const MARK_HIT_CSS = '20px';
 const MARK_HIT_PX = 20;
+// Press-and-hold to summon the icons: long enough not to fire on a tap or a scroll
+// flick, short enough not to feel broken. The slop is how far a finger may drift
+// before it counts as a scroll instead.
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP_PX = 10;
 
 const DELETE_REASONS = [
   { value: 'obsolete',  label: 'Obsolete — nothing uses it any more' },
@@ -184,6 +194,55 @@ function clipRectFor(el) {
   return { top, left, right, bottom };
 }
 
+// Measure one control: its box clipped to whatever is actually showing, or null if
+// it is not a target or not visible right now. Shared by the full scan and by the
+// long-press, so a control the scan thinned out can still be summoned by hand.
+function measureTarget(el) {
+  if (!el || el.nodeType !== 1) return null;
+  if (el.closest('[data-dev-edit-ui]')) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width < MIN_TARGET_PX || r.height < MIN_TARGET_PX) return null;
+
+  // The box has to belong to something you can see. A row scrolled under its card
+  // header, or past the bottom of the card, loses its box the same moment it stops
+  // being readable — the viewport is not the only thing that clips.
+  const clip = clipRectFor(el);
+  if (r.top < clip.top - 1 || r.top > clip.bottom - MIN_TARGET_PX) return null;
+  if (r.right < clip.left || r.left > clip.right) return null;
+
+  // Clamped to the visible slice, so a half-scrolled row is outlined only as far as
+  // it actually shows.
+  const top = Math.max(r.top, clip.top);
+  const left = Math.max(r.left, clip.left);
+  const width = Math.min(r.right, clip.right) - left;
+  const height = Math.min(r.bottom, clip.bottom) - top;
+  if (width < MIN_TARGET_PX || height < 4) return null;
+
+  return {
+    key: idFor(el),
+    top, left, width, height,
+    label: labelFor(el), path: pathFor(el), tag: el.tagName.toLowerCase(),
+  };
+}
+
+// The control a point belongs to: the innermost thing under the pointer that this
+// overlay considers a target. The overlay never takes the pointer itself, so
+// elementFromPoint returns the app's own element and this is a plain lookup.
+function targetAtPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  const hit = el.closest(TARGET_SELECTOR);
+  if (!hit) return null;
+  // Honour the same "outermost wins, except fields" rule the scan uses, so what you
+  // long-press is the box you were looking at.
+  let owner = hit;
+  if (!hit.matches(FIELD_SELECTOR)) {
+    const outer = hit.parentElement?.closest(TARGET_SELECTOR);
+    if (outer && !outer.closest('[data-dev-edit-ui]')) owner = outer;
+  }
+  return measureTarget(owner);
+}
+
 // Collect every visible control, outermost only, excluding our own chrome.
 function scanTargets(cap = MAX_TARGETS) {
   const out = [];
@@ -191,35 +250,13 @@ function scanTargets(cap = MAX_TARGETS) {
   try { nodes = document.querySelectorAll(TARGET_SELECTOR); } catch { return out; }
   for (const el of nodes) {
     if (out.length >= cap) break;
-    if (el.closest('[data-dev-edit-ui]')) continue;
     // Outermost match only — the parent chain already owns this rectangle — except
     // for fields, which are always their own target (see FIELD_SELECTOR).
     if (el.parentElement && el.parentElement.closest(TARGET_SELECTOR) && !el.matches(FIELD_SELECTOR)) continue;
-    // Disabled and read-only controls are marked like any other: they are still
+    // Disabled and read-only controls are boxed like any other: they are still
     // things on the screen the owner may want changed or removed.
-    const r = el.getBoundingClientRect();
-    if (r.width < MIN_TARGET_PX || r.height < MIN_TARGET_PX) continue;
-
-    // The marks live on the top corners, so the top edge is what has to be
-    // showing. A row scrolled under its card header, or past the bottom of the
-    // card, drops its marks the same moment it stops being readable.
-    const clip = clipRectFor(el);
-    if (r.top < clip.top - 1 || r.top > clip.bottom - MIN_TARGET_PX) continue;
-    if (r.right < clip.left || r.left > clip.right) continue;
-
-    // Frame is clamped to the visible slice so a half-scrolled row is outlined
-    // only as far as it actually shows.
-    const top = Math.max(r.top, clip.top);
-    const left = Math.max(r.left, clip.left);
-    const width = Math.min(r.right, clip.right) - left;
-    const height = Math.min(r.bottom, clip.bottom) - top;
-    if (width < MIN_TARGET_PX || height < 4) continue;
-
-    out.push({
-      key: idFor(el),
-      top, left, width, height,
-      label: labelFor(el), path: pathFor(el), tag: el.tagName.toLowerCase(),
-    });
+    const t = measureTarget(el);
+    if (t) out.push(t);
   }
   return out;
 }
@@ -232,10 +269,8 @@ function signature(list) {
   return s;
 }
 
-// One corner mark. A real M3 icon button in its plain (standard) variant, which has
-// no container fill at all — a bare glyph with a hover state layer. The filled
-// variant is what turned a busy screen into "a massive clutter of red and blue
-// circles"; this is the same control without the badge.
+// One summoned icon. A real M3 icon button in its plain (standard) variant, which
+// has no container fill at all — a bare glyph with a hover state layer.
 function CornerMark({ icon, color, title, onClick, style }) {
   return (
     <IconButton
@@ -259,34 +294,27 @@ function CornerMark({ icon, color, title, onClick, style }) {
   );
 }
 
-// One control's frame plus its two marks. Memoised on geometry and colour, so a
-// scroll that moves ten rows re-renders ten frames, not every frame on screen.
-const TargetFrame = React.memo(function TargetFrame({ t, borderColor, pencil, danger, onEdit, onDelete }) {
-  // On a narrow control the two marks would sit on top of each other, so they tuck
-  // to the outside edges instead of the inside corners.
-  const roomy = t.width >= MARK_HIT_PX * 2 + 8;
-  const inset = roomy ? 0 : -MARK_HIT_PX / 2;
+// One control's box. Nothing but an outline — no icons, no web components — which
+// is what lets every control on screen wear one. Memoised on geometry so a scroll
+// that moves ten rows re-renders ten boxes, not every box on screen.
+const TargetFrame = React.memo(function TargetFrame({ t, borderColor, activeColor, active }) {
   return (
     <div style={{
       position: 'absolute', top: t.top, left: t.left, width: t.width, height: t.height,
-      // Faint, not decorative: the outline says "this is a thing you can point at".
-      border: `1px dashed ${borderColor}`, borderRadius: RADIUS.xs,
+      // Faint by default — the box says "this is a thing you can point at" without
+      // shouting. The one you long-pressed goes solid so you can see what you got.
+      border: active ? `2px solid ${activeColor}` : `1px dashed ${borderColor}`,
+      borderRadius: RADIUS.xs,
       pointerEvents: 'none', boxSizing: 'border-box',
-    }}>
-      <CornerMark icon="edit" color={pencil} title={`Suggest a change to “${t.label}”`}
-        onClick={() => onEdit(t)} style={{ top: 0, left: inset }} />
-      <CornerMark icon="delete" color={danger} title={`Ask to remove “${t.label}”`}
-        onClick={() => onDelete(t)} style={{ top: 0, right: inset }} />
-    </div>
+    }} />
   );
 }, (a, b) =>
   // scanTargets builds fresh objects every pass, so the default shallow compare
   // would never match. Compare what actually affects the paint.
   a.t.top === b.t.top && a.t.left === b.t.left &&
   a.t.width === b.t.width && a.t.height === b.t.height &&
-  a.t.label === b.t.label &&
-  a.borderColor === b.borderColor && a.pencil === b.pencil && a.danger === b.danger &&
-  a.onEdit === b.onEdit && a.onDelete === b.onDelete);
+  a.active === b.active &&
+  a.borderColor === b.borderColor && a.activeColor === b.activeColor);
 
 function DevEditMode({ enabled = false, T = {}, onExit }) {
   const C = T;
@@ -297,6 +325,8 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
   const [reason, setReason] = React.useState('obsolete');
   const [saving, setSaving] = React.useState(false);
   const [flash, setFlash] = React.useState(null);
+  // The one control whose icons are showing, summoned by long-press / right-click.
+  const [active, setActive] = React.useState(null);
   const rafRef = React.useRef(0);
   const sigRef = React.useRef('');
   const lastScanRef = React.useRef(0);
@@ -343,6 +373,9 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
       if (sig === sigRef.current) return;
       sigRef.current = sig;
       setTargets(next);
+      // The summoned icons ride on the same measurement, so they follow their box
+      // instead of drifting off it. A box that stopped being visible drops them.
+      setActive(prev => (prev ? next.find(t => t.key === prev.key) || null : null));
     });
   }, []);
 
@@ -387,6 +420,83 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
     };
   }, [scanning, enabled, rescan]);
 
+  // ── Summoning the icons ─────────────────────────────────────────────────────
+  // Right-click on a PC, press-and-hold on a touch screen. Both land on the app
+  // itself (this layer never takes the pointer), so they are caught on the document
+  // and mapped back to a control by point. Capture phase, because plenty of the
+  // app's own rows stop these events on their way up.
+  React.useEffect(() => {
+    if (!enabled || draft) return undefined;
+
+    const summon = (x, y) => {
+      const t = targetAtPoint(x, y);
+      setActive(t);
+      return !!t;
+    };
+
+    const onContextMenu = e => {
+      if (e.target?.closest?.('[data-dev-edit-ui]')) return;   // our own icons
+      // The browser menu would cover the icons it just summoned.
+      if (summon(e.clientX, e.clientY)) e.preventDefault();
+    };
+
+    let pressTimer = 0;
+    let startX = 0, startY = 0;
+    let summoned = false;
+    const clearPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = 0; } };
+
+    const onTouchStart = e => {
+      if (e.touches.length !== 1) return;
+      if (e.target?.closest?.('[data-dev-edit-ui]')) return;
+      const { clientX, clientY } = e.touches[0];
+      startX = clientX; startY = clientY; summoned = false;
+      clearPress();
+      pressTimer = setTimeout(() => {
+        pressTimer = 0;
+        summoned = summon(startX, startY);
+        // A short buzz is the standard "you long-pressed something" feedback and is
+        // the only signal a touch user gets that the icons are now live.
+        if (summoned) { try { navigator.vibrate?.(12); } catch { /* not supported */ } }
+      }, LONG_PRESS_MS);
+    };
+    const onTouchMove = e => {
+      const t = e.touches[0];
+      if (!t) return;
+      if (Math.abs(t.clientX - startX) > LONG_PRESS_SLOP_PX || Math.abs(t.clientY - startY) > LONG_PRESS_SLOP_PX) clearPress();
+    };
+    const onTouchEnd = e => {
+      clearPress();
+      // Swallow the tap that a long-press would otherwise deliver to the app — the
+      // press was aimed at the box, not at the button underneath it.
+      if (summoned) { summoned = false; e.preventDefault(); e.stopPropagation(); }
+    };
+
+    // Anything else means "I'm done with that one".
+    const onPointerDown = e => {
+      if (e.target?.closest?.('[data-dev-edit-ui]')) return;
+      setActive(null);
+    };
+    const onKeyDown = e => { if (e.key === 'Escape') setActive(null); };
+
+    document.addEventListener('contextmenu', onContextMenu, true);
+    document.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
+    document.addEventListener('touchmove', onTouchMove, { capture: true, passive: true });
+    document.addEventListener('touchend', onTouchEnd, true);
+    document.addEventListener('touchcancel', clearPress, true);
+    document.addEventListener('mousedown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      clearPress();
+      document.removeEventListener('contextmenu', onContextMenu, true);
+      document.removeEventListener('touchstart', onTouchStart, { capture: true });
+      document.removeEventListener('touchmove', onTouchMove, { capture: true });
+      document.removeEventListener('touchend', onTouchEnd, true);
+      document.removeEventListener('touchcancel', clearPress, true);
+      document.removeEventListener('mousedown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [enabled, draft]);
+
   // Stable identities — a fresh arrow per render would defeat TargetFrame's memo.
   const openDraft = React.useCallback((mode, t) => {
     setDraft({ mode, ...t }); setNote(''); setReason('obsolete');
@@ -421,6 +531,8 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
     } catch { id = null; }
     setSaving(false);
     setDraft(null);
+    // The icons were summoned for this one box and the note is filed — put them away.
+    setActive(null);
     setFlash(id ? 'Filed in the Bug Log.' : 'Could not save that — check the connection and try again.');
     setTimeout(() => setFlash(null), 4000);
   };
@@ -439,9 +551,35 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
       {/* One frame per control: a faint outline so you can see what is editable,
           with the pencil and the garbage can on its top corners. */}
       {targets.map(t => (
-        <TargetFrame key={t.key} t={t} borderColor={C.divider} pencil={pencil} danger={danger}
-          onEdit={openEdit} onDelete={openDelete} />
+        <TargetFrame key={t.key} t={t} borderColor={C.divider} activeColor={pencil}
+          active={active?.key === t.key} />
       ))}
+
+      {/* The summoned pair — the only two web components this layer creates, and
+          only for the box you long-pressed or right-clicked. On a narrow control
+          they tuck to the outside edges so they do not sit on top of each other. */}
+      {active && (() => {
+        // Above the box when there is room, otherwise tucked inside its top corners
+        // — a control at the very top of the window or of its card would otherwise
+        // have its icons cut off.
+        const above = active.top >= MARK_HIT_PX + 2;
+        const y = above ? -MARK_HIT_PX : 0;
+        const wide = active.width >= MARK_HIT_PX * 2 + 8;
+        const x = wide ? 0 : -MARK_HIT_PX / 2;
+        return (
+        <div style={{
+          position: 'absolute', top: active.top, left: active.left,
+          width: active.width, height: active.height, pointerEvents: 'none',
+        }}>
+          <CornerMark icon="edit" color={pencil} title={`Suggest a change to “${active.label}”`}
+            onClick={() => openEdit(active)}
+            style={{ top: y, left: x }} />
+          <CornerMark icon="delete" color={danger} title={`Ask to remove “${active.label}”`}
+            onClick={() => openDelete(active)}
+            style={{ top: y, right: x }} />
+        </div>
+        );
+      })()}
 
       {/* Watermark — on every page, unmissable, never in the way. */}
       <div style={{
@@ -450,7 +588,7 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
         background: C.text, color: surface, opacity: 0.78,
         fontSize: NC_TYPE.meta, letterSpacing: '0.14em', textTransform: 'uppercase',
         pointerEvents: 'none',
-      }}>Edit mode</div>
+      }}>Edit mode — hold or right-click a box</div>
 
       {/* The floating way out. */}
       <div style={{ position: 'fixed', right: SP.lg, bottom: SP.lg, pointerEvents: 'auto' }}>
@@ -468,7 +606,7 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
         }}>{flash}</div>
       )}
 
-      <Dialog open={!!draft} onClosed={() => setDraft(null)}
+      <Dialog open={!!draft} onClosed={() => { setDraft(null); setActive(null); }}
         style={{ '--md-dialog-container-color': surface, maxWidth: 'min(520px, 94vw)', minWidth: 'min(520px, 94vw)' }}>
         <div slot="headline" style={{ display: 'flex', alignItems: 'center', gap: SP.sm, ...label, fontSize: NC_TYPE.title }}>
           <span style={{ color: draft?.mode === 'delete' ? danger : pencil, display: 'inline-flex' }}>
@@ -510,7 +648,7 @@ function DevEditMode({ enabled = false, T = {}, onExit }) {
           </div>
         </div>
         <div slot="actions">
-          <ActionBtn variant="text" labelColor={C.muted} onClick={() => setDraft(null)}>Cancel</ActionBtn>
+          <ActionBtn variant="text" labelColor={C.muted} onClick={() => { setDraft(null); setActive(null); }}>Cancel</ActionBtn>
           <ActionBtn variant="text" labelColor={accent} onClick={submit} disabled={saving}>
             {saving ? 'Filing…' : 'Skip & file'}
           </ActionBtn>
